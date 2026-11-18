@@ -111,14 +111,14 @@ LNI::CallbackReturn UdpReceiverNode::on_shutdown(const lc::State & state)
 void UdpReceiverNode::get_params()
 {
   try {
-    m_ip = declare_parameter("ip").get<std::string>();
+    m_ip = declare_parameter<std::string>("ip", "127.0.0.1");
   } catch (rclcpp::ParameterTypeException & ex) {
     RCLCPP_ERROR(get_logger(), "The ip paramter provided was invalid");
     throw ex;
   }
 
   try {
-    m_port = declare_parameter("port").get<uint16_t>();
+    m_port = static_cast<uint16_t>(declare_parameter<int>("port", 0));
   } catch (rclcpp::ParameterTypeException & ex) {
     RCLCPP_ERROR(get_logger(), "The port paramter provided was invalid");
     throw ex;

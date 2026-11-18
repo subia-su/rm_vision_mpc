@@ -1,9 +1,10 @@
 #!/bin/bash
 # rm_vision 开机自启动：自瞄管线 + 网页 YOLO 检测框可视化
-# 由 systemd 服务 rm_vision.service 调用（User=kami）
-# 日志：~/yami/logs/vision_bringup.log、~/yami/logs/visualizer.log
+# 由 systemd 服务 rm_vision.service 调用。
 
-LOG_DIR="$HOME/yami/logs"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LOG_DIR="${WORKSPACE_DIR}/logs"
 mkdir -p "$LOG_DIR"
 
 log() { echo "[$(date '+%F %T')] $*"; }
@@ -16,16 +17,16 @@ stop_all() {
 }
 
 start_bringup() {
-  cd "$HOME/yami"
-  source /opt/ros/foxy/setup.bash
+  cd "$WORKSPACE_DIR"
+  source /opt/ros/"${ROS_DISTRO:-humble}"/setup.bash
   source install/setup.bash
   # 注意：不设 ROS_LOCALHOST_ONLY（设了会导致话题数据收不到）
   ros2 launch rm_vision_bringup vision_bringup.launch.py >> "$LOG_DIR/vision_bringup.log" 2>&1
 }
 
 start_visualizer() {
-  cd "$HOME/yami"
-  source /opt/ros/foxy/setup.bash
+  cd "$WORKSPACE_DIR"
+  source /opt/ros/"${ROS_DISTRO:-humble}"/setup.bash
   source install/setup.bash
   while true; do
     log "starting armor_visualizer" >> "$LOG_DIR/visualizer.log"

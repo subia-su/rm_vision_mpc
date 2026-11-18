@@ -12,7 +12,7 @@
 #include <opencv2/imgproc.hpp>
 #include <rclcpp/duration.hpp>
 #include <rclcpp/qos.hpp>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 // STD
 #include <algorithm>
@@ -31,7 +31,7 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions & options)
 {
   RCLCPP_INFO(this->get_logger(), "Starting DetectorNode!");
 
-  // Detector（YOLO 或传统 CV，二选一，默认 YOLO）
+  // Detector（YOLO 或传统 CV，二选一）
   use_yolo_ = this->declare_parameter("use_yolo", true);
 
   // detect_color 为两种模式共用，必须无条件声明（YOLO 模式不会走 initDetector）
@@ -43,9 +43,21 @@ ArmorDetectorNode::ArmorDetectorNode(const rclcpp::NodeOptions & options)
   color_desc.integer_range[0].to_value = 1;
   this->declare_parameter("detect_color", RED, color_desc);
 
-  if (use_yolo_) {
+  bool tensorrt_available = false;
+#ifdef RM_VISION_HAS_TENSORRT
+  tensorrt_available = RM_VISION_HAS_TENSORRT != 0;
+#endif
+
+  if (use_yolo_ && tensorrt_available) {
     yolo_detector_ = initYoloDetector();
   } else {
+    if (use_yolo_) {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "use_yolo=true but this build has no TensorRT/CUDA support; "
+        "falling back to the classic CV detector");
+      use_yolo_ = false;
+    }
     detector_ = initDetector();
   }
 

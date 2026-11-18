@@ -1,11 +1,15 @@
 # rm_vision · RoboMaster 视觉自瞄系统
 
-> **运行环境**：Ubuntu 20.04 / ROS2 Foxy / Jetson AGX Orin（JetPack 5.1.1）
+> **当前本机部署**：Ubuntu 22.04 / ROS 2 Humble / x86_64 CPU。
+> 原始目标平台为 Ubuntu 20.04 / ROS 2 Foxy / Jetson AGX Orin（JetPack 5.1.1）。
+> 本机适配、依赖安装与验证记录见
+> [`docs/local_deployment.md`](docs/local_deployment.md)。
 > **相机**：HikRobot MV-CS016-10UC（海康工业相机，USB3）· **电控**：STM32，串口 `/dev/ttyACM0`
 >
 > 本项目基于 [chenjunnn/rm_vision](https://github.com/chenjunnn/rm_vision) 二次开发，
 > 仓库地址：<https://github.com/subia-su/rm_vision>。
-> 全部命令与串口通讯补丁均已在 Jetson 实机（ROS2 Foxy）验证通过，实测记录见各章节与 §6.4。
+> 原项目的 Jetson 实机记录保留在对应章节；本次本机部署已完成 Humble
+> 编译和串口协议回归，真实相机与电控需接入硬件后验证。
 
 ---
 
@@ -38,8 +42,10 @@ TF 树（`odom → gimbal_link → camera_link → camera_optical_frame`）：�
 ## 2. 目录结构
 
 ```
-~/yami/                              # 工作区根目录
+/home/rm/rm_vision/rm_vision/                              # 工作区根目录
 ├── README.md
+├── docs/
+│   └── local_deployment.md        # ★ 本机 Humble / CPU 部署记录
 ├── src/
 │   ├── rm_auto_aim/
 │   │   ├── armor_detector/          # 装甲板检测（YOLOv8-OBB engine + 传统 CV mlp.onnx/label.txt）
@@ -58,6 +64,7 @@ TF 树（`odom → gimbal_link → camera_link → camera_optical_frame`）：�
 │   ├── ros2_hik_camera/             # 海康相机驱动（包名 hik_camera，内含 MVS SDK）
 │   └── transport_drivers/           # serial_driver 底层（io_context/asio/udp）
 └── tools/
+    ├── setup_local.sh               # 加载 Humble 与可写 ROS 日志目录
     ├── camera_monitor.py            # 相机实时监控（网页 / 窗口两种模式）
     └── armor_visualizer.py          # YOLO 检测框实时可视化（画框+颜色+置信度）
 ```
@@ -69,28 +76,31 @@ TF 树（`odom → gimbal_link → camera_link → camera_optical_frame`）：�
 ```bash
 # 依赖（或直接 rosdep install）
 sudo apt install -y \
-  ros-foxy-cv-bridge ros-foxy-image-transport ros-foxy-image-transport-plugins \
-  ros-foxy-camera-info-manager ros-foxy-vision-opencv \
-  ros-foxy-tf2-ros ros-foxy-tf2-geometry-msgs ros-foxy-message-filters \
-  libasio-dev libeigen3-dev
+  ros-humble-cv-bridge ros-humble-image-transport ros-humble-image-transport-plugins \
+  ros-humble-camera-info-manager ros-humble-camera-calibration ros-humble-vision-opencv \
+  ros-humble-tf2-ros ros-humble-tf2-geometry-msgs ros-humble-message-filters \
+  ros-humble-xacro ros-humble-ament-cmake-clang-format libasio-dev libeigen3-dev
 
-# 编译（实测：12 packages finished, 0 failures）
-cd ~/yami
-source /opt/ros/foxy/setup.bash
-colcon build --symlink-install
+# 编译（本机实测：13 packages finished, 0 failures）
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
+colcon build --symlink-install --cmake-args -DBUILD_TESTING=OFF
+source tools/setup_local.sh
 ```
 
 > `--symlink-install` 安装为软链，修改 `src/…/config/*.yaml` 直接生效，无需重新编译。
-> `transport_drivers` 以源码内嵌，无需安装 ros-foxy-serial-driver。
+> `transport_drivers` 以源码内嵌，无需安装 ros-humble-serial-driver。
 > 串口权限：`sudo usermod -aG dialout $USER`（重新登录生效）。
+> 当前本机没有 CUDA/TensorRT，默认 `use_yolo: false`，使用传统 CV 检测器；
+> TensorRT 已改为编译时可选项，不影响无 GPU 机器全量编译。
 
 ### 3.1 开机自启动（systemd）
 
-开机自动启动自瞄管线 + 网页 YOLO 检测框（无需登录）：
+接好相机和电控后，可安装开机自动启动自瞄管线与网页检测框：
 
 ```bash
 # 脚本与 unit 文件已在仓库 tools/ 下
-sudo cp ~/yami/tools/rm_vision.service /etc/systemd/system/
+sudo cp /home/rm/rm_vision/rm_vision/tools/rm_vision.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now rm_vision     # 启用并立即启动
 
@@ -101,13 +111,16 @@ sudo systemctl stop rm_vision             # 停止
 sudo systemctl disable rm_vision          # 取消开机自启
 
 # 日志
-tail -f ~/yami/logs/vision_bringup.log    # 管线日志
-tail -f ~/yami/logs/visualizer.log        # 可视化日志
+tail -f /home/rm/rm_vision/rm_vision/logs/vision_bringup.log    # 管线日志
+tail -f /home/rm/rm_vision/rm_vision/logs/visualizer.log        # 可视化日志
 ```
 
 - 服务在 `multi-user.target` 阶段启动，相机/串口未插时对应节点会重试，硬件就位后自动恢复。
 - bringup 异常退出时 systemd 5 秒后自动重启整套；可视化程序退出则内部自动拉起。
 - 启动脚本 `tools/auto_start.sh` 自动清理 `/dev/shm` 残留、不设 `ROS_LOCALHOST_ONLY`。
+
+> 当前本机尚未连接硬件，因此没有启用该系统服务。无硬件时请使用 §4.4，
+> 避免完整管线反复等待相机和串口。
 
 > **离线无网络调车**（无路由器场景：网线直连 / USB 共享网络 / 手机热点）见
 > [`docs/offline_connection.md`](docs/offline_connection.md)。
@@ -122,10 +135,8 @@ tail -f ~/yami/logs/visualizer.log        # 可视化日志
 ### 4.1 完整自瞄（真机，相机 + 电控都在）
 
 ```bash
-cd ~/yami
-source /opt/ros/foxy/setup.bash
-source install/setup.bash
-export ROS_LOCALHOST_ONLY=1
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
 ros2 launch rm_vision_bringup vision_bringup.launch.py
 ```
 
@@ -136,16 +147,13 @@ ros2 launch rm_vision_bringup vision_bringup.launch.py
 
 ```bash
 # 终端 1：只起相机
-cd ~/yami
-source /opt/ros/foxy/setup.bash
-source install/setup.bash
-export ROS_LOCALHOST_ONLY=1
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
 ros2 launch hik_camera hik_camera.launch.py
 
 # 终端 2：起监控网页（只订阅 /image_raw，不影响管线）
-cd ~/yami
-source /opt/ros/foxy/setup.bash
-export ROS_LOCALHOST_ONLY=1
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
 python3 tools/camera_monitor.py
 
 # 本机浏览器打开： http://<jetson-ip>:8080/
@@ -159,9 +167,8 @@ python3 tools/camera_monitor.py
 完整 vision_bringup 运行时（armor_detector 发布 `/detector/yolo_boxes`），实时观察检测效果：
 
 ```bash
-cd ~/yami
-source /opt/ros/foxy/setup.bash
-source install/setup.bash
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
 python3 tools/armor_visualizer.py              # 网页：http://<jetson-ip>:8081/
 python3 tools/armor_visualizer.py --mode window    # 有显示器时用 OpenCV 窗口
 python3 tools/armor_visualizer.py --save /tmp/vis  # 每帧保存标注图
@@ -174,16 +181,15 @@ python3 tools/armor_visualizer.py --save /tmp/vis  # 每帧保存标注图
 ### 4.4 无硬件运行（只跑检测 + 跟踪）
 
 ```bash
-cd ~/yami
-source /opt/ros/foxy/setup.bash
-source install/setup.bash
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
 ros2 launch rm_vision_bringup no_hardware.launch.py
 ```
 
 ### 4.5 常用查看指令（均实测可用）
 
 ```bash
-cd ~/yami && source /opt/ros/foxy/setup.bash && source install/setup.bash
+cd /home/rm/rm_vision/rm_vision && source tools/setup_local.sh
 # 注意：不要 export ROS_LOCALHOST_ONLY=1（会导致新进程收不到话题数据，见 §7.1）
 
 ros2 node list                                  # 节点列表
@@ -209,11 +215,11 @@ ros2 param set /armor_detector debug false      # 运行时关闭调试图（仅
 
 # 串口收发统计（每秒 Feedback frames / CRC errors，需先停掉完整视觉，避免串口被占用）
 ros2 run rm_serial_driver rm_serial_driver_node --ros-args -r __node:=serial_driver \
-  --log-level debug --params-file ~/yami/src/rm_vision_bringup/config/node_params.yaml
+  --log-level debug --params-file /home/rm/rm_vision/rm_vision/src/rm_vision_bringup/config/node_params.yaml
 ```
 
-> 注意：Foxy 的 `ros2 topic hz/echo` **不支持** `--qos-reliability` 等 QoS 选项，
-> 直接使用即可（本仓库发布端为 best-effort，CLI 默认 QoS 可正常接收）。
+> 本机使用 Humble。探测 `hz/echo` 时若遇到 QoS 不兼容，可显式选择
+> `--qos-reliability best_effort`；本仓库发布端为 best-effort。
 
 ---
 
@@ -229,7 +235,7 @@ ros2 run rm_serial_driver rm_serial_driver_node --ros-args -r __node:=serial_dri
 | | `width` / `height` | 640 / 640 | 相机 ROI 分辨率（传感器中心裁剪），改后需按 §5.2 换算内参 |
 | `/serial_driver` | `device_name` | `/dev/ttyACM0` | 串口设备 |
 | | `timestamp_offset` | 0.006 | 电控↔视觉固定时延补偿 |
-| `/armor_detector` | `use_yolo` | true | true=YOLOv8-OBB(TensorRT)；false=传统 CV |
+| `/armor_detector` | `use_yolo` | false | 本机无 TensorRT，默认传统 CV；Jetson 可改 true |
 | | `yolo.conf_threshold` | 0.15 | YOLO 置信度阈值（远距离召回偏低时可再调 0.10） |
 | | `yolo.nms_threshold` | 0.5 | YOLO NMS IoU 阈值 |
 | | `yolo.target_numbers` | `[guard,1..5]` | 3V3 白名单：哨兵 guard + 步兵 1~5；`[]`=全部 18 类 |
@@ -255,9 +261,10 @@ ros2 run rm_serial_driver rm_serial_driver_node --ros-args -r __node:=serial_dri
 
 > 上述 `debug` 调试图开销警告仅针对传统 CV 模式；YOLO 模式（`use_yolo: true`）不发布调试图。
 
-### 5.1 YOLOv8-OBB 检测器（`use_yolo: true`，默认）
+### 5.1 YOLOv8-OBB 检测器（`use_yolo: true`，Jetson 可选）
 
-检测器默认走 YOLOv8s-OBB + TensorRT FP16，替代传统 CV 的灯条配对。要点：
+当前本机默认使用传统 CV。在具备 CUDA/TensorRT 的 Jetson 上可启用
+YOLOv8s-OBB + TensorRT FP16，替代传统 CV 的灯条配对。要点：
 
 - **模型**：`yolov8s_obb_fp16.engine`（~23 MiB，输入 640×640，输出 `[1,23,8400]`，
   其中 23 = cx/cy/w/h + 18 类分数 + θ）。18 类按颜色分区：`B_*`(0~8) / `R_*`(9~17)；
@@ -268,7 +275,7 @@ ros2 run rm_serial_driver rm_serial_driver_node --ros-args -r __node:=serial_dri
     --saveEngine=/tmp/yolov8s_obb_fp16.engine --fp16 \
     --memPoolSize=workspace:2048 --tacticSources=-CUDNN --iterations=100
   cp /tmp/yolov8s_obb_fp16.engine \
-    ~/yami/src/rm_auto_aim/armor_detector/model/yolov8s_obb_fp16.engine
+    /home/rm/rm_vision/rm_vision/src/rm_auto_aim/armor_detector/model/yolov8s_obb_fp16.engine
   ```
   实测 Xavier（TRT 8.5.2 / CC 7.2）：构建约 21 分钟，GPU 推理约 16.8 ms（58.75 qps）。
 - **3V3 白名单**：`yolo.target_numbers` 默认 `["guard","1","2","3","4","5"]` 只保留哨兵 + 步兵；
@@ -331,9 +338,9 @@ USB/串口一次读写可能只传输部分帧，也可能合并多帧。修复�
 校验后广播 TF，坏帧搜索下一个 `0x5A`；下行持续写完 26 字节。目标订阅仅保留最新一条。
 上行默认每 10 ms 尝试发送一次（约 100 Hz）；下行随 `/tracker/target` 更新，不能按固定 USB 块长解析。
 损坏包统计（每秒 `Feedback frames=..., CRC errors=...`）需要 debug 级别日志，见 §4.4 的
-串口独立运行命令。注意：Foxy 的 rcl **不支持** `--log-level serial_driver:=debug` 这种
-`logger:=level` 写法，须使用 `--log-level debug`。统计最多每秒打印一次；不再逐帧刷
-CRC/Invalid header 日志。实测（步兵下位机）约 100 Hz 有效帧、CRC errors=0。
+串口独立运行命令。调试级别使用 `--log-level debug`。统计最多每秒打印一次；
+不再逐帧刷 CRC/Invalid header 日志。原 Jetson 实机实测约 100 Hz 有效帧、
+CRC errors=0；本机需接入电控后复测。
 
 ### 6.3 当前下位机能力与限制
 
@@ -374,17 +381,16 @@ A5 49 F4 01 9C FF 32 00 9D 00 19 00 CE FF 00 00 78 00 1A 00 1E 00 05 00 14 C5
 负数与越界/非有限数值。部署在视觉电脑工作区根目录：
 
 ```bash
-source /opt/ros/foxy/setup.bash
+source tools/setup_local.sh
 colcon build --symlink-install --packages-select rm_serial_driver rm_vision_bringup
 colcon test --packages-select rm_serial_driver
 colcon test-result --verbose
-source install/setup.bash
 # 先停止旧视觉进程，再使用 §4.1 启动完整自瞄
 ```
 
 本次默认关闭检测调试图以减少处理开销。无需因这份上位机补丁重新烧录 MCU。
 
-已在 Jetson（ROS2 Foxy）实测验证：
+原始 Jetson（ROS 2 Foxy）验证记录：
 
 - 完整编译 12 个包 0 失败；`colcon test --packages-select rm_serial_driver` 的
   24 项测试（含 `serial_packet_stream_test` 与各 lint）全部通过。

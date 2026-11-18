@@ -22,7 +22,8 @@
     debug: false
 
     # true: 使用 YOLOv8-OBB(TensorRT)；false: 使用传统 CV 检测器
-    use_yolo: true
+    # 当前工作机没有 CUDA/TensorRT，默认使用传统 CV；Jetson 上可改回 true。
+    use_yolo: false
     yolo.conf_threshold: 0.15
     yolo.nms_threshold: 0.5
     # 3V3: 只识别哨兵(guard) + 步兵(1~5)；留空 [] 则识别全部 18 类

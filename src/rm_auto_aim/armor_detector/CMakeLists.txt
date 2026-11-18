@@ -24,29 +24,50 @@ ament_auto_find_build_dependencies()
 ## Build ##
 ###########
 
-ament_auto_add_library(${PROJECT_NAME} SHARED
-  DIRECTORY src
+set(ARMOR_DETECTOR_SOURCES
+  src/detector.cpp
+  src/detector_node.cpp
+  src/number_classifier.cpp
+  src/pnp_solver.cpp
 )
+
+# TensorRT + CUDA 是可选的。没有 TensorRT 时保留传统 CV 检测器，
+# 使 x86 开发机和未安装 CUDA 的机器也能完整编译、运行。
+find_library(NVINFER_LIB nvinfer)
+find_library(NVINFER_PLUGIN_LIB nvinfer_plugin)
+find_package(CUDA QUIET)
+if(CUDA_FOUND)
+  set(CUDART_LIB ${CUDA_LIBRARIES})
+  set(CUDA_INCLUDE_DIR ${CUDA_INCLUDE_DIRS})
+else()
+  find_library(CUDART_LIB cudart PATHS /usr/local/cuda/lib64)
+  find_path(CUDA_INCLUDE_DIR cuda_runtime_api.h PATHS /usr/local/cuda/include)
+endif()
+
+if(NVINFER_LIB AND NVINFER_PLUGIN_LIB AND CUDART_LIB AND CUDA_INCLUDE_DIR)
+  message(STATUS "TensorRT support enabled")
+  list(APPEND ARMOR_DETECTOR_SOURCES src/yolo_detector.cpp)
+  set(TENSORRT_ENABLED TRUE)
+else()
+  message(STATUS "TensorRT/CUDA not found; using the classic CV detector fallback")
+  list(APPEND ARMOR_DETECTOR_SOURCES src/yolo_detector_stub.cpp)
+  set(TENSORRT_ENABLED FALSE)
+endif()
+
+ament_auto_add_library(${PROJECT_NAME} SHARED ${ARMOR_DETECTOR_SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
 
-# TensorRT + CUDA（YOLO 检测器）
-find_library(NVINFER_LIB nvinfer)
-find_library(NVINFER_PLUGIN_LIB nvinfer_plugin)
-target_link_libraries(${PROJECT_NAME} ${NVINFER_LIB} ${NVINFER_PLUGIN_LIB})
-find_package(CUDA QUIET)
-if(CUDA_FOUND)
-  target_include_directories(${PROJECT_NAME} PUBLIC ${CUDA_INCLUDE_DIRS})
-  target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})
+if(TENSORRT_ENABLED)
+  target_include_directories(${PROJECT_NAME} PUBLIC ${CUDA_INCLUDE_DIR})
+  target_link_libraries(${PROJECT_NAME} ${NVINFER_LIB} ${NVINFER_PLUGIN_LIB} ${CUDART_LIB})
+  target_compile_definitions(${PROJECT_NAME} PRIVATE RM_VISION_HAS_TENSORRT=1)
+  # TensorRT 8.5 的 enqueueV2/destroy 等 API 已标记 deprecated，但仍可用。
+  target_compile_options(${PROJECT_NAME} PRIVATE -Wno-deprecated-declarations)
 else()
-  # 回退：Jetson 默认 CUDA 路径
-  target_include_directories(${PROJECT_NAME} PUBLIC /usr/local/cuda/include)
-  find_library(CUDART_LIB cudart PATHS /usr/local/cuda/lib64)
-  target_link_libraries(${PROJECT_NAME} ${CUDART_LIB})
+  target_compile_definitions(${PROJECT_NAME} PRIVATE RM_VISION_HAS_TENSORRT=0)
 endif()
-# TensorRT 8.5 的 enqueueV2/destroy 等 API 标记为 deprecated，但仍可用；关闭该告警（配合全局 -Werror）
-target_compile_options(${PROJECT_NAME} PRIVATE -Wno-deprecated-declarations)
 
 rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN rm_auto_aim::ArmorDetectorNode

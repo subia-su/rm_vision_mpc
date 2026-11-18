@@ -46,7 +46,7 @@
 
 ```bash
 # 1. 只起相机（标定时不需要检测/跟踪）
-cd ~/yami && source /opt/ros/foxy/setup.bash && source install/setup.bash
+cd /home/rm/rm_vision/rm_vision && source tools/setup_local.sh
 ros2 launch hik_camera hik_camera.launch.py
 # 若标定 640×640 模式：确认 node_params.yaml 里 width: 640 height: 640
 
