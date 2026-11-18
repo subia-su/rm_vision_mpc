@@ -119,8 +119,8 @@ tail -f /home/rm/rm_vision/rm_vision/logs/visualizer.log        # 可视化日�
 - bringup 异常退出时 systemd 5 秒后自动重启整套；可视化程序退出则内部自动拉起。
 - 启动脚本 `tools/auto_start.sh` 自动清理 `/dev/shm` 残留、不设 `ROS_LOCALHOST_ONLY`。
 
-> 当前本机尚未连接硬件，因此没有启用该系统服务。无硬件时请使用 §4.4，
-> 避免完整管线反复等待相机和串口。
+> 本次验证未启用该系统服务。无硬件时请使用 §4.4，避免完整管线反复等待
+> 相机和串口。
 
 > **离线无网络调车**（无路由器场景：网线直连 / USB 共享网络 / 手机热点）见
 > [`docs/offline_connection.md`](docs/offline_connection.md)。
@@ -233,6 +233,7 @@ ros2 run rm_serial_driver rm_serial_driver_node --ros-args -r __node:=serial_dri
 | | `gain` | 8.0 | 增益，优先调曝光 |
 | | `frame_rate` | 46.0 | 采集帧率 (Hz)；640×640 下实测 46Hz，1440×1080 在 USB2 仅 24Hz |
 | | `width` / `height` | 640 / 640 | 相机 ROI 分辨率（传感器中心裁剪），改后需按 §5.2 换算内参 |
+| | `offset_x` / `offset_y` | -1 / -1 | ROI 偏移；`-1` 自动在传感器范围内居中 |
 | `/serial_driver` | `device_name` | `/dev/ttyACM0` | 串口设备 |
 | | `timestamp_offset` | 0.006 | 电控↔视觉固定时延补偿 |
 | `/armor_detector` | `use_yolo` | false | 本机无 TensorRT，默认传统 CV；Jetson 可改 true |

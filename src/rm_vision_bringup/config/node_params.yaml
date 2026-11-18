@@ -6,6 +6,9 @@
     frame_rate: 46.0
     width: 640
     height: 640
+    # -1 表示在当前传感器范围内自动居中
+    offset_x: -1
+    offset_y: -1
 
 /serial_driver:
   ros__parameters:

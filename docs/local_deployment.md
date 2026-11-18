@@ -24,8 +24,8 @@ Ubuntu 20.04 + ROS 2 Foxy，本机已调整为 Ubuntu 22.04 + ROS 2 Humble
 | Python | 3.10.12 | 使用系统 Python |
 | 编译器 | GCC / CMake 3.22 | 已完成全量编译 |
 | GPU | 未检测到 NVIDIA CUDA/TensorRT | 默认使用传统 CV 检测器 |
-| 相机 | 当前未连接 `/dev/video*` 或海康 USB 设备 | 需连接后验证 |
-| 串口 | 当前未连接 `/dev/ttyACM*` | 需连接电控后验证 |
+| 相机 | Hikrobot `2bdf:0001`，SDK 直接访问 USB | 已通过 640×640 ROI 验证 |
+| 串口 | STM32 CDC `/dev/ttyACM0`，属于 `dialout` | 已通过 100 Hz 反馈验证 |
 
 ## 3. 安装依赖
 
@@ -67,7 +67,7 @@ source tools/setup_local.sh
 
 ## 5. 无硬件启动
 
-当前未连接相机和电控时，仅启动检测器、跟踪器与机器人状态发布器：
+未连接相机和电控时，仅启动检测器、跟踪器与机器人状态发布器：
 
 ```bash
 cd /home/rm/rm_vision/rm_vision
@@ -100,7 +100,8 @@ sudo usermod -aG dialout "$USER"
 检查主参数 `src/rm_vision_bringup/config/node_params.yaml`：
 
 - 串口 `device_name` 默认 `/dev/ttyACM0`
-- 相机参数默认为海康 640×640、46 Hz
+- 相机参数默认为海康中心 ROI 640×640、46 Hz；`offset_x/offset_y=-1`
+  自动居中
 - `use_yolo: false` 适合当前无 TensorRT 的开发机
 
 连接硬件后启动完整管线：
@@ -133,8 +134,11 @@ ros2 launch rm_vision_bringup vision_bringup.launch.py
 - 全量 `colcon build`：13 个包成功。
 - `serial_packet_stream_test`：拆包、CRC 恢复、连续帧、短写、参考帧、
   flags 与数值边界测试通过。
-- 本机未连接相机和电控，因此尚未验证真实图像、串口反馈、TF 姿态和
-  实车延迟。
+- 海康相机硬件验证：实际输出 640×640（ROI 偏移 400,220）、46 Hz，
+  `/image_raw` 与 `/camera_info` 分辨率一致，图像转换正常。
+- 串口硬件验证：约 100 Hz 有效反馈、`CRC errors=0`，云台 TF 约 100 Hz。
+- 当前画面没有装甲板目标，因此完整目标检测、跟踪和下行控制闭环仍需在
+  实际目标场景中验证。
 
 上游的 ROS 风格 lint 仍有既有告警，且 `xmllint` 需要访问在线 ROS schema；
 这些不影响功能测试和本地运行。

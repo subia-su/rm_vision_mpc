@@ -8,6 +8,12 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <stdexcept>
+#include <thread>
+
 namespace hik_camera
 {
 class HikCameraNode : public rclcpp::Node
@@ -37,11 +43,8 @@ public:
 
     // Get camera infomation
     MV_CC_GetImageInfo(camera_handle_, &img_info_);
-    image_msg_.data.reserve(img_info_.nHeightMax * img_info_.nWidthMax * 3);
 
     // Init convert param
-    convert_param_.nWidth = img_info_.nWidthValue;
-    convert_param_.nHeight = img_info_.nHeightValue;
     convert_param_.enDstPixelType = PixelType_Gvsp_RGB8_Packed;
 
     bool use_sensor_data_qos = this->declare_parameter("use_sensor_data_qos", true);
@@ -50,7 +53,12 @@ public:
 
     declareParameters();
 
-    MV_CC_StartGrabbing(camera_handle_);
+    nRet = MV_CC_GetImageInfo(camera_handle_, &img_info_);
+    if (MV_OK != nRet) {
+      throw std::runtime_error("Failed to read camera image info after ROI configuration");
+    }
+    image_msg_.data.reserve(
+      static_cast<size_t>(img_info_.nHeightMax) * img_info_.nWidthMax * 3);
 
     // Load camera info
     camera_name_ = this->declare_parameter("camera_name", "narrow_stereo");
@@ -64,6 +72,19 @@ public:
     } else {
       RCLCPP_WARN(this->get_logger(), "Invalid camera info URL: %s", camera_info_url.c_str());
     }
+
+    if (
+      camera_info_msg_.width != img_info_.nWidthValue ||
+      camera_info_msg_.height != img_info_.nHeightValue)
+    {
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Camera info is %ux%u but camera output is %ux%u; recalibrate or fix ROI",
+        camera_info_msg_.width, camera_info_msg_.height, img_info_.nWidthValue,
+        img_info_.nHeightValue);
+    }
+
+    MV_CC_StartGrabbing(camera_handle_);
 
     params_callback_handle_ = this->add_on_set_parameters_callback(
       std::bind(&HikCameraNode::parametersCallback, this, std::placeholders::_1));
@@ -79,21 +100,36 @@ public:
       while (rclcpp::ok()) {
         nRet = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000);
         if (MV_OK == nRet) {
-          convert_param_.pDstBuffer = image_msg_.data.data();
+          image_msg_.height = out_frame.stFrameInfo.nHeight;
+          image_msg_.width = out_frame.stFrameInfo.nWidth;
+          image_msg_.step = image_msg_.width * 3;
+          image_msg_.data.resize(static_cast<size_t>(image_msg_.step) * image_msg_.height);
+
+          // MV_CC_ConvertPixelType writes into a preallocated destination buffer.
+          // resize() must happen before assigning pDstBuffer, because reserve() does
+          // not change vector::size().
+          convert_param_.nWidth = image_msg_.width;
+          convert_param_.nHeight = image_msg_.height;
           convert_param_.nDstBufferSize = image_msg_.data.size();
+          convert_param_.pDstBuffer = image_msg_.data.data();
           convert_param_.pSrcData = out_frame.pBufAddr;
           convert_param_.nSrcDataLen = out_frame.stFrameInfo.nFrameLen;
           convert_param_.enSrcPixelType = out_frame.stFrameInfo.enPixelType;
 
-          MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
+          const int convert_ret = MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
+          if (MV_OK != convert_ret) {
+            RCLCPP_WARN_THROTTLE(
+              this->get_logger(), *this->get_clock(), 1000,
+              "Pixel conversion failed! nRet: [%x]", convert_ret);
+            MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
+            continue;
+          }
 
           image_msg_.header.stamp = this->now();
-          image_msg_.height = out_frame.stFrameInfo.nHeight;
-          image_msg_.width = out_frame.stFrameInfo.nWidth;
-          image_msg_.step = out_frame.stFrameInfo.nWidth * 3;
-          image_msg_.data.resize(image_msg_.width * image_msg_.height * 3);
 
           camera_info_msg_.header = image_msg_.header;
+          camera_info_msg_.width = image_msg_.width;
+          camera_info_msg_.height = image_msg_.height;
           camera_pub_.publish(image_msg_, camera_info_msg_);
 
           MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
@@ -131,6 +167,32 @@ private:
   {
     rcl_interfaces::msg::ParameterDescriptor param_desc;
     MVCC_FLOATVALUE f_value;
+
+    int width = this->declare_parameter("width", static_cast<int>(img_info_.nWidthValue));
+    int height = this->declare_parameter("height", static_cast<int>(img_info_.nHeightValue));
+    int offset_x = this->declare_parameter("offset_x", -1);
+    int offset_y = this->declare_parameter("offset_y", -1);
+    configureRoi(width, height, offset_x, offset_y);
+
+    MV_CC_GetFloatValue(camera_handle_, "AcquisitionFrameRate", &f_value);
+    double frame_rate = this->declare_parameter("frame_rate", static_cast<double>(f_value.fCurValue));
+    if (frame_rate <= 0.0) {
+      throw std::invalid_argument("frame_rate must be greater than zero");
+    }
+    int ret = MV_CC_SetBoolValue(camera_handle_, "AcquisitionFrameRateEnable", true);
+    if (MV_OK != ret) {
+      throw std::runtime_error(
+              "Failed to enable AcquisitionFrameRate, status = " + std::to_string(ret));
+    }
+    ret = MV_CC_SetFloatValue(
+      camera_handle_, "AcquisitionFrameRate", static_cast<float>(frame_rate));
+    if (MV_OK != ret) {
+      throw std::runtime_error(
+              "Failed to set AcquisitionFrameRate, status = " + std::to_string(ret));
+    }
+    MV_CC_GetFloatValue(camera_handle_, "AcquisitionFrameRate", &f_value);
+    RCLCPP_INFO(this->get_logger(), "Frame rate: %.2f", f_value.fCurValue);
+
     // Exposure time
     param_desc.description = "Exposure time in microseconds";
     MV_CC_GetFloatValue(camera_handle_, "ExposureTime", &f_value);
@@ -144,6 +206,103 @@ private:
     double gain = this->declare_parameter("gain", f_value.fCurValue, param_desc);
     MV_CC_SetFloatValue(camera_handle_, "Gain", gain);
     RCLCPP_INFO(this->get_logger(), "Gain: %f", gain);
+  }
+
+  void configureRoi(int width, int height, int requested_offset_x, int requested_offset_y)
+  {
+    MVCC_INTVALUE_EX width_range{};
+    MVCC_INTVALUE_EX height_range{};
+    MVCC_INTVALUE_EX offset_x_range{};
+    MVCC_INTVALUE_EX offset_y_range{};
+
+    auto get_range = [this](const char * feature, MVCC_INTVALUE_EX & range) {
+        const int ret = MV_CC_GetIntValueEx(camera_handle_, feature, &range);
+        if (MV_OK != ret) {
+          throw std::runtime_error(
+                  "Failed to read camera feature " + std::string(feature) +
+                  ", status = " + std::to_string(ret));
+        }
+      };
+    auto align_down = [](int64_t value, int64_t increment) {
+        if (increment <= 1) {
+          return value;
+        }
+        return value - value % increment;
+      };
+    auto validate = [](int64_t value, const MVCC_INTVALUE_EX & range, const char * feature) {
+        if (
+          value < range.nMin || value > range.nMax ||
+          (range.nInc > 1 && value % range.nInc != 0))
+        {
+          throw std::invalid_argument(
+                  std::string(feature) + " must be within [" +
+                  std::to_string(range.nMin) + ", " + std::to_string(range.nMax) +
+                  "] and a multiple of " + std::to_string(range.nInc));
+        }
+      };
+
+    get_range("Width", width_range);
+    get_range("Height", height_range);
+    get_range("OffsetX", offset_x_range);
+    get_range("OffsetY", offset_y_range);
+
+    const int64_t aligned_width = align_down(width, width_range.nInc);
+    const int64_t aligned_height = align_down(height, height_range.nInc);
+    validate(aligned_width, width_range, "width");
+    validate(aligned_height, height_range, "height");
+
+    // Start from offset zero so the camera can reduce Width/Height first.
+    int ret = MV_CC_SetIntValueEx(camera_handle_, "OffsetX", 0);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to reset OffsetX, status = " + std::to_string(ret));
+    }
+    ret = MV_CC_SetIntValueEx(camera_handle_, "OffsetY", 0);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to reset OffsetY, status = " + std::to_string(ret));
+    }
+    ret = MV_CC_SetIntValueEx(camera_handle_, "Width", aligned_width);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to set Width, status = " + std::to_string(ret));
+    }
+    ret = MV_CC_SetIntValueEx(camera_handle_, "Height", aligned_height);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to set Height, status = " + std::to_string(ret));
+    }
+
+    get_range("OffsetX", offset_x_range);
+    get_range("OffsetY", offset_y_range);
+    const int64_t center_x = align_down(
+      std::min((width_range.nMax - aligned_width) / 2, offset_x_range.nMax),
+      offset_x_range.nInc);
+    const int64_t center_y = align_down(
+      std::min((height_range.nMax - aligned_height) / 2, offset_y_range.nMax),
+      offset_y_range.nInc);
+    const int64_t final_offset_x = requested_offset_x < 0 ? center_x : requested_offset_x;
+    const int64_t final_offset_y = requested_offset_y < 0 ? center_y : requested_offset_y;
+    validate(final_offset_x, offset_x_range, "offset_x");
+    validate(final_offset_y, offset_y_range, "offset_y");
+
+    ret = MV_CC_SetIntValueEx(camera_handle_, "OffsetX", final_offset_x);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to set OffsetX, status = " + std::to_string(ret));
+    }
+    ret = MV_CC_SetIntValueEx(camera_handle_, "OffsetY", final_offset_y);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to set OffsetY, status = " + std::to_string(ret));
+    }
+
+    MVCC_INTVALUE_EX actual_width{};
+    MVCC_INTVALUE_EX actual_height{};
+    MVCC_INTVALUE_EX actual_offset_x{};
+    MVCC_INTVALUE_EX actual_offset_y{};
+    get_range("Width", actual_width);
+    get_range("Height", actual_height);
+    get_range("OffsetX", actual_offset_x);
+    get_range("OffsetY", actual_offset_y);
+    RCLCPP_INFO(
+      this->get_logger(), "ROI: %ldx%ld offset=(%ld,%ld)",
+      actual_width.nCurValue, actual_height.nCurValue, actual_offset_x.nCurValue,
+      actual_offset_y.nCurValue);
   }
 
   rcl_interfaces::msg::SetParametersResult parametersCallback(
