@@ -24,6 +24,7 @@ Ubuntu 20.04 + ROS 2 Foxy，本机已调整为 Ubuntu 22.04 + ROS 2 Humble
 | Python | 3.10.12 | 使用系统 Python |
 | 编译器 | GCC / CMake 3.22 | 已完成全量编译 |
 | GPU | 未检测到 NVIDIA CUDA/TensorRT | 默认使用传统 CV 检测器 |
+| OpenCV DNN | 本地 OpenCV 4.12 + 系统 OpenCV 4.5.4 | 独立进程，避免 ABI 混用 |
 | 相机 | Hikrobot `2bdf:0001`，SDK 直接访问 USB | 已通过 640×640 ROI 验证 |
 | 串口 | STM32 CDC `/dev/ttyACM0`，属于 `dialout` | 已通过 100 Hz 反馈验证 |
 
@@ -127,6 +128,29 @@ ros2 launch rm_vision_bringup vision_bringup.launch.py
 如果编译时没有检测到 TensorRT/CUDA，即使误设 `use_yolo: true`，节点也会
 打印警告并回退到传统 CV 检测器，不会因缺少 GPU 库直接退出。
 
+### 7.1 YOLO26 ONNX + OpenCV DNN CPU
+
+导入的数据与模型：
+
+- `datasets/yolo26_obb/`：6104 张图像，5497 train / 607 val，36 类 OBB
+- `src/rm_auto_aim/armor_detector/model/yolo26_obb.onnx`
+- `experiments/yolo26_onnx_cpu/`：独立精度与性能验证
+
+系统 OpenCV 4.5.4 无法解析模型的 attention `Split` 节点，因此项目在
+`/home/rm/rm_vision/.deps/opencv-4.12` 构建独立 OpenCV 4.12：
+
+```bash
+sudo bash tools/build_opencv_dnn.sh
+source tools/setup_local.sh
+colcon build --symlink-install --packages-select \
+  auto_aim_interfaces armor_detector yolo26_dnn_detector rm_vision_bringup
+ros2 launch rm_vision_bringup yolo26_cpu_bringup.launch.py
+```
+
+完整验证结论：607 张验证集 `mAP@0.5=0.5995`，CPU 16 线程模型推理约
+24 FPS，ROS 端到端约 17–18 FPS。适合离线验证和低频检测，不建议直接替代
+现有 46 FPS 经典 CV 实时路径。
+
 ## 8. 验证记录
 
 已执行：
@@ -137,6 +161,8 @@ ros2 launch rm_vision_bringup vision_bringup.launch.py
 - 海康相机硬件验证：实际输出 640×640（ROI 偏移 400,220）、46 Hz，
   `/image_raw` 与 `/camera_info` 分辨率一致，图像转换正常。
 - 串口硬件验证：约 100 Hz 有效反馈、`CRC errors=0`，云台 TF 约 100 Hz。
+- YOLO26 OpenCV DNN 硬件验证：模型成功加载，相机 640×640/46 Hz，
+  DNN 节点输出约 17–18 Hz。
 - 当前画面没有装甲板目标，因此完整目标检测、跟踪和下行控制闭环仍需在
   实际目标场景中验证。
 

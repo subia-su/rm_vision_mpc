@@ -1,0 +1,43 @@
+# Portable YOLO-OBB dataset configuration.
+# Keep this file inside the extracted dataset directory.
+train: images/train
+val: images/val
+channels: 3
+
+names:
+  0: blue_sentry
+  1: blue_hero
+  2: blue_engineer
+  3: blue_infantry_3
+  4: blue_infantry_4
+  5: blue_infantry_5
+  6: blue_outpost
+  7: blue_base_small
+  8: blue_base_large
+  9: red_sentry
+  10: red_hero
+  11: red_engineer
+  12: red_infantry_3
+  13: red_infantry_4
+  14: red_infantry_5
+  15: red_outpost
+  16: red_base_small
+  17: red_base_large
+  18: gray_sentry
+  19: gray_hero
+  20: gray_engineer
+  21: gray_infantry_3
+  22: gray_infantry_4
+  23: gray_infantry_5
+  24: gray_outpost
+  25: gray_base_small
+  26: gray_base_large
+  27: purple_sentry
+  28: purple_hero
+  29: purple_engineer
+  30: purple_infantry_3
+  31: purple_infantry_4
+  32: purple_infantry_5
+  33: purple_outpost
+  34: purple_base_small
+  35: purple_base_large

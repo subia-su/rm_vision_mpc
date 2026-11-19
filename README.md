@@ -93,6 +93,8 @@ source tools/setup_local.sh
 > 串口权限：`sudo usermod -aG dialout $USER`（重新登录生效）。
 > 当前本机没有 CUDA/TensorRT，默认 `use_yolo: false`，使用传统 CV 检测器；
 > TensorRT 已改为编译时可选项，不影响无 GPU 机器全量编译。
+> YOLO26 ONNX 的 OpenCV DNN CPU 后端需要 OpenCV 4.10 以上。本机使用
+> `tools/build_opencv_dnn.sh` 安装独立的 OpenCV 4.12，不替换 ROS 的 4.5.4。
 
 ### 3.1 开机自启动（systemd）
 
@@ -220,6 +222,37 @@ ros2 run rm_serial_driver rm_serial_driver_node --ros-args -r __node:=serial_dri
 
 > 本机使用 Humble。探测 `hz/echo` 时若遇到 QoS 不兼容，可显式选择
 > `--qos-reliability best_effort`；本仓库发布端为 best-effort。
+
+### 4.6 YOLO26 ONNX OpenCV DNN CPU 推理
+
+模型与数据已导入：
+
+- 模型：`src/rm_auto_aim/armor_detector/model/yolo26_obb.onnx`
+- 类别：`src/rm_auto_aim/armor_detector/model/yolo26_classes.txt`
+- 数据集：`datasets/yolo26_obb/`（5497 train + 607 val）
+- 独立验证与报告：`experiments/yolo26_onnx_cpu/`
+
+首次部署独立 OpenCV 4.12：
+
+```bash
+cd /home/rm/rm_vision/rm_vision
+sudo bash tools/build_opencv_dnn.sh
+```
+
+编译并启动 CPU DNN 管线：
+
+```bash
+cd /home/rm/rm_vision/rm_vision
+source tools/setup_local.sh
+colcon build --symlink-install --packages-select \
+  auto_aim_interfaces armor_detector yolo26_dnn_detector rm_vision_bringup
+source tools/setup_local.sh
+ros2 launch rm_vision_bringup yolo26_cpu_bringup.launch.py
+```
+
+该启动文件使用独立进程加载 OpenCV 4.12，避免与 ROS Humble `cv_bridge`
+使用的 OpenCV 4.5.4 发生 ABI 混用。完整验证结果见
+`experiments/yolo26_onnx_cpu/results/report.md`。
 
 ---
 

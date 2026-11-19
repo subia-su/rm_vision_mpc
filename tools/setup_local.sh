@@ -27,6 +27,7 @@ fi
 export ROS_HOME="${RM_VISION_ROOT}/.ros"
 export ROS_LOG_DIR="${RM_VISION_ROOT}/logs/ros"
 export ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-1}"
+export RM_VISION_OPENCV_DNN_DIR="$(cd "${RM_VISION_ROOT}/.." && pwd)/.deps/opencv-4.12"
 mkdir -p "${ROS_LOG_DIR}"
 
 echo "rm_vision 环境已加载: ${RM_VISION_ROOT} (${RM_VISION_ROS_DISTRO})"

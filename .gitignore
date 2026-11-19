@@ -5,6 +5,12 @@ log/
 .ros/
 logs/
 
+# Imported training data and experiment environments
+datasets/yolo26_obb/images/
+datasets/yolo26_obb/labels/
+experiments/yolo26_onnx_cpu/.venv/
+experiments/yolo26_onnx_cpu/samples/*.jpg
+
 # Python
 __pycache__/
 *.pyc

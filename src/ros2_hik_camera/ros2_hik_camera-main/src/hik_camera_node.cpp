@@ -172,7 +172,11 @@ private:
     int height = this->declare_parameter("height", static_cast<int>(img_info_.nHeightValue));
     int offset_x = this->declare_parameter("offset_x", -1);
     int offset_y = this->declare_parameter("offset_y", -1);
-    configureRoi(width, height, offset_x, offset_y);
+    int sensor_width = this->declare_parameter(
+      "sensor_width", static_cast<int>(img_info_.nWidthMax));
+    int sensor_height = this->declare_parameter(
+      "sensor_height", static_cast<int>(img_info_.nHeightMax));
+    configureRoi(width, height, offset_x, offset_y, sensor_width, sensor_height);
 
     MV_CC_GetFloatValue(camera_handle_, "AcquisitionFrameRate", &f_value);
     double frame_rate = this->declare_parameter("frame_rate", static_cast<double>(f_value.fCurValue));
@@ -208,8 +212,17 @@ private:
     RCLCPP_INFO(this->get_logger(), "Gain: %f", gain);
   }
 
-  void configureRoi(int width, int height, int requested_offset_x, int requested_offset_y)
+  void configureRoi(
+    int width, int height, int requested_offset_x, int requested_offset_y,
+    int sensor_width, int sensor_height)
   {
+    if (
+      sensor_width <= 0 || sensor_height <= 0 || width > sensor_width ||
+      height > sensor_height)
+    {
+      throw std::invalid_argument("ROI must fit within the configured sensor dimensions");
+    }
+
     MVCC_INTVALUE_EX width_range{};
     MVCC_INTVALUE_EX height_range{};
     MVCC_INTVALUE_EX offset_x_range{};
@@ -243,6 +256,10 @@ private:
 
     get_range("Width", width_range);
     get_range("Height", height_range);
+    // Width/Height maxima can depend on the previous offsets. Refresh all
+    // ranges after resetting offsets and applying the requested dimensions.
+    get_range("Width", width_range);
+    get_range("Height", height_range);
     get_range("OffsetX", offset_x_range);
     get_range("OffsetY", offset_y_range);
 
@@ -260,6 +277,18 @@ private:
     if (MV_OK != ret) {
       throw std::runtime_error("Failed to reset OffsetY, status = " + std::to_string(ret));
     }
+
+    // Some Hikrobot models persist ROI settings across processes and report a
+    // reduced feature maximum until the sensor is restored to full frame.
+    ret = MV_CC_SetIntValueEx(camera_handle_, "Width", sensor_width);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to restore sensor width, status = " + std::to_string(ret));
+    }
+    ret = MV_CC_SetIntValueEx(camera_handle_, "Height", sensor_height);
+    if (MV_OK != ret) {
+      throw std::runtime_error("Failed to restore sensor height, status = " + std::to_string(ret));
+    }
+
     ret = MV_CC_SetIntValueEx(camera_handle_, "Width", aligned_width);
     if (MV_OK != ret) {
       throw std::runtime_error("Failed to set Width, status = " + std::to_string(ret));
@@ -271,16 +300,28 @@ private:
 
     get_range("OffsetX", offset_x_range);
     get_range("OffsetY", offset_y_range);
-    const int64_t center_x = align_down(
-      std::min((width_range.nMax - aligned_width) / 2, offset_x_range.nMax),
-      offset_x_range.nInc);
-    const int64_t center_y = align_down(
-      std::min((height_range.nMax - aligned_height) / 2, offset_y_range.nMax),
-      offset_y_range.nInc);
+    const int64_t max_offset_x = sensor_width - aligned_width;
+    const int64_t max_offset_y = sensor_height - aligned_height;
+    const int64_t center_x = align_down(max_offset_x / 2, offset_x_range.nInc);
+    const int64_t center_y = align_down(max_offset_y / 2, offset_y_range.nInc);
     const int64_t final_offset_x = requested_offset_x < 0 ? center_x : requested_offset_x;
     const int64_t final_offset_y = requested_offset_y < 0 ? center_y : requested_offset_y;
-    validate(final_offset_x, offset_x_range, "offset_x");
-    validate(final_offset_y, offset_y_range, "offset_y");
+    if (
+      final_offset_x < 0 || final_offset_x > max_offset_x ||
+      (offset_x_range.nInc > 1 && final_offset_x % offset_x_range.nInc != 0))
+    {
+      throw std::invalid_argument(
+              "offset_x must be within [0, " + std::to_string(max_offset_x) +
+              "] and a multiple of " + std::to_string(offset_x_range.nInc));
+    }
+    if (
+      final_offset_y < 0 || final_offset_y > max_offset_y ||
+      (offset_y_range.nInc > 1 && final_offset_y % offset_y_range.nInc != 0))
+    {
+      throw std::invalid_argument(
+              "offset_y must be within [0, " + std::to_string(max_offset_y) +
+              "] and a multiple of " + std::to_string(offset_y_range.nInc));
+    }
 
     ret = MV_CC_SetIntValueEx(camera_handle_, "OffsetX", final_offset_x);
     if (MV_OK != ret) {
