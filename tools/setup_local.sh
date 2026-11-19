@@ -18,6 +18,12 @@ fi
 
 source "${RM_VISION_ROS_SETUP}"
 
+RM_VISION_DEPS_ROOT="$(cd "${RM_VISION_ROOT}/.." && pwd)/.deps"
+RM_VISION_OPENVINO_DIR="${RM_VISION_DEPS_ROOT}/openvino-2026.4.1"
+if [[ -f "${RM_VISION_OPENVINO_DIR}/setupvars.sh" ]]; then
+  source "${RM_VISION_OPENVINO_DIR}/setupvars.sh" >/dev/null
+fi
+
 if [[ -f "${RM_VISION_ROOT}/install/setup.bash" ]]; then
   source "${RM_VISION_ROOT}/install/setup.bash"
 fi
@@ -27,7 +33,8 @@ fi
 export ROS_HOME="${RM_VISION_ROOT}/.ros"
 export ROS_LOG_DIR="${RM_VISION_ROOT}/logs/ros"
 export ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-1}"
-export RM_VISION_OPENCV_DNN_DIR="$(cd "${RM_VISION_ROOT}/.." && pwd)/.deps/opencv-4.12"
+export RM_VISION_OPENVINO_DIR
+export RM_VISION_OPENCV_DNN_DIR="${RM_VISION_DEPS_ROOT}/opencv-4.12-openvino"
 mkdir -p "${ROS_LOG_DIR}"
 
 echo "rm_vision 环境已加载: ${RM_VISION_ROOT} (${RM_VISION_ROS_DISTRO})"

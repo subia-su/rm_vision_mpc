@@ -12,6 +12,7 @@ find_package(OpenCV 4.12 REQUIRED CONFIG
   PATHS "${RM_VISION_OPENCV_DNN_DIR}/lib/cmake/opencv4"
   NO_DEFAULT_PATH
 )
+find_package(OpenVINO REQUIRED)
 
 set(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
 set(DETECTOR_DIR
@@ -19,12 +20,13 @@ set(DETECTOR_DIR
 
 add_executable(yolo26_cpu_benchmark
   benchmark.cpp
+  "${DETECTOR_DIR}/src/openvino_yolo_detector.cpp"
   "${DETECTOR_DIR}/src/opencv_yolo_detector.cpp"
 )
 target_include_directories(yolo26_cpu_benchmark PRIVATE
   "${DETECTOR_DIR}/include"
 )
-target_link_libraries(yolo26_cpu_benchmark ${OpenCV_LIBS})
+target_link_libraries(yolo26_cpu_benchmark ${OpenCV_LIBS} openvino::runtime)
 set_target_properties(yolo26_cpu_benchmark PROPERTIES
   BUILD_RPATH "${RM_VISION_OPENCV_DNN_DIR}/lib"
 )

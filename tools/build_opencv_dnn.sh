@@ -2,7 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INSTALL_DIR="$(cd "${ROOT}/.." && pwd)/.deps/opencv-4.12"
+DEPS_DIR="$(cd "${ROOT}/.." && pwd)/.deps"
+INSTALL_DIR="${DEPS_DIR}/opencv-4.12-openvino"
+OPENVINO_DIR="${DEPS_DIR}/openvino-2026.4.1"
 SOURCE_DIR="/tmp/opencv-4.12.0"
 BUILD_DIR="/tmp/opencv-4.12-build"
 VERSION="4.12.0"
@@ -13,10 +15,24 @@ if [[ -f "${INSTALL_DIR}/lib/cmake/opencv4/OpenCVConfig.cmake" ]]; then
   exit 0
 fi
 
+if [[ ! -f "${OPENVINO_DIR}/runtime/cmake/OpenVINOConfig.cmake" ]]; then
+  echo "OpenVINO 2026.4.1 is not installed; run tools/install_openvino.sh first" >&2
+  exit 1
+fi
+
 if [[ ! -d "${SOURCE_DIR}" ]]; then
   curl -L --fail --output "${ARCHIVE}" \
     "https://github.com/opencv/opencv/archive/refs/tags/${VERSION}.tar.gz"
   tar -xzf "${ARCHIVE}" -C /tmp
+fi
+
+# OpenVINO 2026 returns const tensor data. OpenCV 4.12's legacy
+# readNetFromModelOptimizer wrapper still constructs a non-const Mat view.
+INF_ENGINE_SOURCE="${SOURCE_DIR}/modules/dnn/src/op_inf_engine.cpp"
+if ! grep -q 'const_cast<void \*>(blob.data())' "${INF_ENGINE_SOURCE}"; then
+  sed -i \
+    's/return Mat(size, type, blob.data());/return Mat(size, type, const_cast<void *>(blob.data()));/' \
+    "${INF_ENGINE_SOURCE}"
 fi
 
 cmake -S "${SOURCE_DIR}" -B "${BUILD_DIR}" \
@@ -31,6 +47,8 @@ cmake -S "${SOURCE_DIR}" -B "${BUILD_DIR}" \
   -DBUILD_opencv_python3=OFF \
   -DBUILD_PROTOBUF=ON \
   -DWITH_PROTOBUF=ON \
+  -DWITH_OPENVINO=ON \
+  -DOpenVINO_DIR="${OPENVINO_DIR}/runtime/cmake" \
   -DWITH_IPP=OFF \
   -DWITH_OPENCL=OFF \
   -DWITH_FFMPEG=OFF \

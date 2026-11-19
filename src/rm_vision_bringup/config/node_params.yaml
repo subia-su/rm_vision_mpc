@@ -35,9 +35,10 @@
     yolo.target_numbers: ["guard", "1", "2", "3", "4", "5"]
 
     # OpenCV DNN CPU 可选后端；由 yolo26_cpu_bringup.launch.py 使用
-    dnn.conf_threshold: 0.25
+    dnn.backend: openvino_int8
+    dnn.conf_threshold: 0.35
     dnn.nms_threshold: 0.5
-    dnn.threads: 16
+    dnn.threads: 6
 
     detect_color: 0
     binary_thres: 30

@@ -13,7 +13,8 @@ def generate_launch_description():
     from common import launch_params, node_params, robot_state_publisher, tracker_node
     from launch import LaunchDescription
     from launch.actions import Shutdown, TimerAction
-    from launch_ros.actions import Node
+    from launch_ros.descriptions import ComposableNode
+    from launch_ros.actions import ComposableNodeContainer, Node
 
     if launch_params["camera"] != "hik":
         raise RuntimeError("YOLO26 DNN launch currently requires the hik camera")
@@ -23,20 +24,27 @@ def generate_launch_description():
     camera_parameters = parameters["/camera_node"]["ros__parameters"]
     detector_parameters = parameters["/armor_detector"]["ros__parameters"]
 
-    camera_node = Node(
-        package="hik_camera",
-        executable="hik_camera_node",
-        name="camera_node",
-        parameters=[camera_parameters],
-        output="both",
-        emulate_tty=True,
-        on_exit=Shutdown(),
-    )
-    detector_node = Node(
-        package="yolo26_dnn_detector",
-        executable="yolo26_dnn_node",
-        name="armor_detector",
-        parameters=[detector_parameters],
+    camera_detector_container = ComposableNodeContainer(
+        name="camera_detector_container",
+        namespace="",
+        package="rclcpp_components",
+        executable="component_container",
+        composable_node_descriptions=[
+            ComposableNode(
+                package="hik_camera",
+                plugin="hik_camera::HikCameraNode",
+                name="camera_node",
+                parameters=[camera_parameters],
+                extra_arguments=[{"use_intra_process_comms": True}],
+            ),
+            ComposableNode(
+                package="yolo26_dnn_detector",
+                plugin="rm_auto_aim::Yolo26DnnNode",
+                name="armor_detector",
+                parameters=[detector_parameters],
+                extra_arguments=[{"use_intra_process_comms": True}],
+            ),
+        ],
         output="both",
         emulate_tty=True,
         on_exit=Shutdown(),
@@ -51,8 +59,7 @@ def generate_launch_description():
         on_exit=Shutdown(),
     )
 
-    delay_detector = TimerAction(period=1.0, actions=[detector_node])
     delay_serial = TimerAction(period=1.5, actions=[serial_driver_node])
     delay_tracker = TimerAction(period=2.0, actions=[tracker_node])
     return LaunchDescription(
-        [robot_state_publisher, camera_node, delay_detector, delay_serial, delay_tracker])
+        [robot_state_publisher, camera_detector_container, delay_serial, delay_tracker])

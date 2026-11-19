@@ -11,6 +11,8 @@
 #include <numeric>
 #include <stdexcept>
 
+#include "yolo26_dnn_detector/yolo_detector.hpp"
+
 namespace rm_auto_aim
 {
 namespace
@@ -43,12 +45,19 @@ std::string colorPrefix(const std::string & class_name)
 
 OpenCvYoloDetector::OpenCvYoloDetector(
   const std::string & model_path, const std::string & classes_path,
-  float confidence_threshold, float nms_threshold, int threads)
-: confidence_threshold_(confidence_threshold), nms_threshold_(nms_threshold)
+  float confidence_threshold, float nms_threshold, int threads,
+  const std::string & model_bin, bool use_openvino)
+: confidence_threshold_(confidence_threshold), nms_threshold_(nms_threshold),
+  use_openvino_(use_openvino)
 {
   cv::setNumThreads(threads);
-  net_ = cv::dnn::readNetFromONNX(model_path);
-  net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+  if (use_openvino_) {
+    net_ = cv::dnn::readNetFromModelOptimizer(model_path, model_bin);
+    net_.setPreferableBackend(cv::dnn::DNN_BACKEND_INFERENCE_ENGINE);
+  } else {
+    net_ = cv::dnn::readNetFromONNX(model_path);
+    net_.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+  }
   net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
 
   std::ifstream stream(classes_path);

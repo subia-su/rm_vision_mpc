@@ -1,0 +1,33 @@
+{
+  "model": "src/rm_auto_aim/armor_detector/model/yolo26_obb_int8.xml",
+  "model_size_bytes": 813508,
+  "image_count": 607,
+  "map50": 0.5936059829062376,
+  "precision": 0.7126099706744868,
+  "recall": 0.8925619834710744,
+  "f1": 0.7924989808397881,
+  "class_ap50": {
+    "blue_engineer": 0.9467739456609449,
+    "blue_infantry_4": 0.8552941374001288,
+    "red_infantry_4": 0.9175450172063836,
+    "blue_infantry_5": 0.9360076000064718,
+    "red_hero": 0.9539276500340211,
+    "red_infantry_5": 0.25,
+    "blue_infantry_3": 0.786684163070738,
+    "blue_hero": 0.6410033870399462,
+    "red_engineer": 0.9984834570158067,
+    "gray_engineer": 1.0,
+    "gray_outpost": 0.0,
+    "red_infantry_3": 0.8055823519715979,
+    "blue_sentry": 1.0,
+    "blue_base_large": 0.0
+  },
+  "timing_ms": {
+    "preprocess_mean": 2.552448517298392,
+    "inference_mean": 7.575571326197849,
+    "inference_p50": 7.530276000579761,
+    "inference_p95": 8.588022999902023,
+    "postprocess_mean": 0.7970893146679167,
+    "estimated_fps": 132.003245292114
+  }
+}

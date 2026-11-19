@@ -2,10 +2,12 @@
 // Licensed under the Apache-2.0 License.
 
 #include "yolo26_dnn_detector/opencv_yolo_detector.hpp"
+#include "yolo26_dnn_detector/openvino_yolo_detector.hpp"
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <opencv2/calib3d.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_components/register_node_macro.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
@@ -125,11 +127,26 @@ public:
   {
     const std::string armor_detector_share =
       ament_index_cpp::get_package_share_directory("armor_detector");
-    const std::string default_model = armor_detector_share + "/model/yolo26_obb.onnx";
+    const std::string backend = this->declare_parameter<std::string>(
+      "dnn.backend", "opencv_dnn");
+    const bool use_openvino = backend == "openvino_fp32" || backend == "openvino_int8";
+    const std::string default_model =
+      backend == "openvino_int8" ?
+      armor_detector_share + "/model/yolo26_obb_int8.xml" :
+      use_openvino ?
+      armor_detector_share + "/model/yolo26_obb_fp32.xml" :
+      armor_detector_share + "/model/yolo26_obb.onnx";
     const std::string default_classes =
       armor_detector_share + "/model/yolo26_classes.txt";
     const std::string model_path =
       this->declare_parameter("dnn.model_path", default_model);
+    std::string default_bin = model_path;
+    const auto extension = default_bin.rfind(".xml");
+    if (extension != std::string::npos) {
+      default_bin.replace(extension, 4, ".bin");
+    }
+    const std::string model_bin =
+      this->declare_parameter("dnn.model_bin", use_openvino ? default_bin : "");
     const std::string classes_path =
       this->declare_parameter("dnn.classes_path", default_classes);
     const float confidence =
@@ -138,8 +155,13 @@ public:
     const int threads = this->declare_parameter("dnn.threads", 16);
     this->declare_parameter("detect_color", 0);
 
-    detector_ = std::make_unique<OpenCvYoloDetector>(
-      model_path, classes_path, confidence, nms, threads);
+    if (use_openvino) {
+      detector_ = std::make_unique<OpenVinoYoloDetector>(
+        model_path, classes_path, confidence, nms, threads);
+    } else {
+      detector_ = std::make_unique<OpenCvYoloDetector>(
+        model_path, classes_path, confidence, nms, threads, model_bin, false);
+    }
 
     armors_pub_ = this->create_publisher<auto_aim_interfaces::msg::Armors>(
       "/detector/armors", rclcpp::SensorDataQoS());
@@ -167,8 +189,8 @@ public:
       "/image_raw", image_qos,
       std::bind(&Yolo26DnnNode::imageCallback, this, std::placeholders::_1));
     RCLCPP_INFO(
-      this->get_logger(), "YOLO26 OpenCV DNN started: model=%s threads=%d",
-      model_path.c_str(), threads);
+      this->get_logger(), "YOLO26 DNN started: backend=%s model=%s threads=%d",
+      backend.c_str(), model_path.c_str(), threads);
   }
 
 private:
@@ -242,7 +264,7 @@ private:
     }
   }
 
-  std::unique_ptr<OpenCvYoloDetector> detector_;
+  std::unique_ptr<YoloDetectorBase> detector_;
   rclcpp::Publisher<auto_aim_interfaces::msg::Armors>::SharedPtr armors_pub_;
   rclcpp::Publisher<auto_aim_interfaces::msg::YoloBoxes>::SharedPtr yolo_boxes_pub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
@@ -253,10 +275,4 @@ private:
 
 }  // namespace rm_auto_aim
 
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<rm_auto_aim::Yolo26DnnNode>(rclcpp::NodeOptions()));
-  rclcpp::shutdown();
-  return 0;
-}
+RCLCPP_COMPONENTS_REGISTER_NODE(rm_auto_aim::Yolo26DnnNode)
