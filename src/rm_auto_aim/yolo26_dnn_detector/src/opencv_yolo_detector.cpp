@@ -11,6 +11,7 @@
 #include <numeric>
 #include <stdexcept>
 
+#include "yolo26_dnn_detector/dnn_preprocess.hpp"
 #include "yolo26_dnn_detector/yolo_detector.hpp"
 
 namespace rm_auto_aim
@@ -79,23 +80,8 @@ OpenCvYoloDetector::OpenCvYoloDetector(
 std::vector<DnnDetection> OpenCvYoloDetector::detect(
   const cv::Mat & image, bool input_is_rgb, int detect_color)
 {
-  const float scale = std::min(
-    static_cast<float>(INPUT_SIZE) / image.cols,
-    static_cast<float>(INPUT_SIZE) / image.rows);
-  const int resized_width = std::lround(image.cols * scale);
-  const int resized_height = std::lround(image.rows * scale);
-  const int left = (INPUT_SIZE - resized_width) / 2;
-  const int top = (INPUT_SIZE - resized_height) / 2;
-
-  cv::Mat resized;
-  cv::resize(image, resized, cv::Size(resized_width, resized_height));
-  cv::Mat canvas(INPUT_SIZE, INPUT_SIZE, CV_8UC3, cv::Scalar(114, 114, 114));
-  resized.copyTo(canvas(cv::Rect(left, top, resized_width, resized_height)));
-
-  cv::Mat blob = cv::dnn::blobFromImage(
-    canvas, 1.0 / 255.0, cv::Size(INPUT_SIZE, INPUT_SIZE), cv::Scalar(), !input_is_rgb,
-    false, CV_32F);
-  net_.setInput(blob);
+  const DnnInput prepared = prepareDnnInput(image, input_is_rgb);
+  net_.setInput(prepared.blob);
   const cv::Mat output = net_.forward();
   if (
     output.dims != 3 || output.size[1] != NUM_FEATURES ||
@@ -174,11 +160,11 @@ std::vector<DnnDetection> OpenCvYoloDetector::detect(
     detection.class_id = best_class;
     detection.score = best_score;
     detection.center_x =
-      (output.ptr<float>(0, 0)[anchor] - left) / scale;
+      (output.ptr<float>(0, 0)[anchor] - prepared.pad_left) / prepared.scale;
     detection.center_y =
-      (output.ptr<float>(0, 1)[anchor] - top) / scale;
-    detection.width = output.ptr<float>(0, 2)[anchor] / scale;
-    detection.height = output.ptr<float>(0, 3)[anchor] / scale;
+      (output.ptr<float>(0, 1)[anchor] - prepared.pad_top) / prepared.scale;
+    detection.width = output.ptr<float>(0, 2)[anchor] / prepared.scale;
+    detection.height = output.ptr<float>(0, 3)[anchor] / prepared.scale;
     detection.angle = output.ptr<float>(0, 40)[anchor];
     const cv::RotatedRect rotated(
       cv::Point2f(detection.center_x, detection.center_y),

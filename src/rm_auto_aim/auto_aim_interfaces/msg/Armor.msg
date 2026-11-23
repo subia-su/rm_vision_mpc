@@ -1,4 +1,6 @@
 string number
 string type
 float32 distance_to_image_center
+float32 confidence
+float32 reprojection_error
 geometry_msgs/Pose pose

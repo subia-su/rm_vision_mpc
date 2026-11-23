@@ -2,6 +2,8 @@
 
 #include "armor_tracker/extended_kalman_filter.hpp"
 
+#include <algorithm>
+
 namespace rm_auto_aim
 {
 ExtendedKalmanFilter::ExtendedKalmanFilter(
@@ -37,9 +39,10 @@ Eigen::MatrixXd ExtendedKalmanFilter::predict()
   return x_pri;
 }
 
-Eigen::MatrixXd ExtendedKalmanFilter::update(const Eigen::VectorXd & z)
+Eigen::MatrixXd ExtendedKalmanFilter::update(
+  const Eigen::VectorXd & z, double measurement_scale)
 {
-  H = jacobian_h(x_pri), R = update_R(z);
+  H = jacobian_h(x_pri), R = update_R(z) * std::max(measurement_scale, 1e-6);
 
   K = P_pri * H.transpose() * (H * P_pri * H.transpose() + R).inverse();
   x_post = x_pri + K * (z - h(x_pri));

@@ -3,6 +3,7 @@
 
 #include "yolo26_dnn_detector/opencv_yolo_detector.hpp"
 #include "yolo26_dnn_detector/openvino_yolo_detector.hpp"
+#include "yolo26_dnn_detector/pnp_filter.hpp"
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <opencv2/calib3d.hpp>
@@ -155,6 +156,27 @@ public:
     const int threads = this->declare_parameter("dnn.threads", 16);
     this->declare_parameter("detect_color", 0);
 
+    PnpFilterConfig filter_config;
+    filter_config.max_reprojection_error_px =
+      this->declare_parameter("filter.max_reprojection_error_px", 8.0);
+    filter_config.min_box_aspect =
+      this->declare_parameter("filter.min_box_aspect", 1.2);
+    filter_config.max_box_aspect =
+      this->declare_parameter("filter.max_box_aspect", 6.5);
+    filter_config.min_depth_m =
+      this->declare_parameter("filter.min_depth_m", 0.05);
+    filter_config.max_depth_m =
+      this->declare_parameter("filter.max_depth_m", 12.0);
+    filter_config.temporal_gate_seconds =
+      this->declare_parameter("filter.temporal_gate_seconds", 0.15);
+    filter_config.max_position_jump_m =
+      this->declare_parameter("filter.max_position_jump_m", 1.5);
+    filter_config.max_image_jump_px =
+      this->declare_parameter("filter.max_image_jump_px", 220.0);
+    filter_config.max_angle_jump_rad =
+      this->declare_parameter("filter.max_angle_jump_rad", 1.4);
+    pnp_filter_ = std::make_unique<PnpFilter>(filter_config);
+
     if (use_openvino) {
       detector_ = std::make_unique<OpenVinoYoloDetector>(
         model_path, classes_path, confidence, nms, threads);
@@ -221,11 +243,28 @@ private:
         }
         cv::Mat rotation_vector;
         cv::Mat translation_vector;
+        const auto object_points = objectPoints(metadata.large);
         if (
           !cv::solvePnP(
-            objectPoints(metadata.large), image_points, camera_matrix_, distortion_,
+            object_points, image_points, camera_matrix_, distortion_,
             rotation_vector, translation_vector, false, cv::SOLVEPNP_IPPE))
         {
+          continue;
+        }
+
+        const double stamp_seconds = rclcpp::Time(message->header.stamp).seconds();
+        const PnpFilterResult filter_result = pnp_filter_->evaluate(
+          metadata.number, stamp_seconds, detection.width, detection.height,
+          cv::Point2f(detection.center_x, detection.center_y), detection.angle,
+          rotation_vector, translation_vector, camera_matrix_, distortion_,
+          object_points, image_points);
+        if (!filter_result.accepted) {
+          RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 1000,
+            "Rejected PnP result (%s): %s reproj=%.2fpx jump=%.2fm %.1fpx %.2frad",
+            metadata.number.c_str(), filter_result.reason.c_str(),
+            filter_result.reprojection_error_px, filter_result.position_jump_m,
+            filter_result.image_jump_px, filter_result.angle_jump_rad);
           continue;
         }
 
@@ -236,6 +275,9 @@ private:
         auto_aim_interfaces::msg::Armor armor;
         armor.number = metadata.number;
         armor.type = metadata.armor_type;
+        armor.confidence = detection.score;
+        armor.reprojection_error = static_cast<float>(
+          filter_result.reprojection_error_px);
         armor.pose.position.x = translation_vector.at<double>(0);
         armor.pose.position.y = translation_vector.at<double>(1);
         armor.pose.position.z = translation_vector.at<double>(2);
@@ -265,6 +307,7 @@ private:
   }
 
   std::unique_ptr<YoloDetectorBase> detector_;
+  std::unique_ptr<PnpFilter> pnp_filter_;
   rclcpp::Publisher<auto_aim_interfaces::msg::Armors>::SharedPtr armors_pub_;
   rclcpp::Publisher<auto_aim_interfaces::msg::YoloBoxes>::SharedPtr yolo_boxes_pub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;

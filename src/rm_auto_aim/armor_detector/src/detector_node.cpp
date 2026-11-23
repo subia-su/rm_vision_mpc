@@ -156,6 +156,8 @@ void ArmorDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstShared
         // Fill basic info
         armor_msg.type = ARMOR_TYPE_STR[static_cast<int>(armor.type)];
         armor_msg.number = armor.number;
+        armor_msg.confidence = armor.confidence;
+        armor_msg.reprojection_error = -1.0F;
 
         // Fill pose
         armor_msg.pose.position.x = tvec.at<double>(0);

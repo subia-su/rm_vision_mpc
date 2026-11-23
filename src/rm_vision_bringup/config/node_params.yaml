@@ -40,6 +40,17 @@
     dnn.nms_threshold: 0.5
     dnn.threads: 6
 
+    # PnP geometry and short-horizon temporal gates
+    filter.max_reprojection_error_px: 8.0
+    filter.min_box_aspect: 1.2
+    filter.max_box_aspect: 6.5
+    filter.min_depth_m: 0.05
+    filter.max_depth_m: 12.0
+    filter.temporal_gate_seconds: 0.15
+    filter.max_position_jump_m: 1.5
+    filter.max_image_jump_px: 220.0
+    filter.max_angle_jump_rad: 1.4
+
     detect_color: 0
     binary_thres: 30
 
@@ -61,6 +72,9 @@
 
       r_xyz_factor: 4e-4
       r_yaw: 5e-3
+      confidence_reference: 0.7
+      confidence_r_min_scale: 0.25
+      confidence_r_max_scale: 4.0
 
     tracker:
       max_match_distance: 1.0

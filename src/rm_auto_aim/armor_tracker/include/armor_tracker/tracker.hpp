@@ -27,7 +27,11 @@ enum class ArmorsNum { NORMAL_4 = 4, BALANCE_2 = 2, OUTPOST_3 = 3 };
 class Tracker
 {
 public:
-  Tracker(double max_match_distance, double max_match_yaw_diff);
+  Tracker(
+    double max_match_distance, double max_match_yaw_diff,
+    double confidence_reference = 0.7,
+    double confidence_min_scale = 0.25,
+    double confidence_max_scale = 4.0);
 
   using Armors = auto_aim_interfaces::msg::Armors;
   using Armor = auto_aim_interfaces::msg::Armor;
@@ -75,6 +79,9 @@ private:
 
   double max_match_distance_;
   double max_match_yaw_diff_;
+  double confidence_reference_;
+  double confidence_min_scale_;
+  double confidence_max_scale_;
 
   int detect_count_;
   int lost_count_;

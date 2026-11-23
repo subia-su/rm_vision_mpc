@@ -20,6 +20,7 @@ set(DETECTOR_DIR
 
 add_executable(yolo26_cpu_benchmark
   benchmark.cpp
+  "${DETECTOR_DIR}/src/dnn_preprocess.cpp"
   "${DETECTOR_DIR}/src/openvino_yolo_detector.cpp"
   "${DETECTOR_DIR}/src/opencv_yolo_detector.cpp"
 )

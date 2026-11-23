@@ -18,7 +18,15 @@ ArmorTrackerNode::ArmorTrackerNode(const rclcpp::NodeOptions & options)
   // Tracker
   double max_match_distance = this->declare_parameter("tracker.max_match_distance", 0.15);
   double max_match_yaw_diff = this->declare_parameter("tracker.max_match_yaw_diff", 1.0);
-  tracker_ = std::make_unique<Tracker>(max_match_distance, max_match_yaw_diff);
+  const double confidence_reference =
+    this->declare_parameter("ekf.confidence_reference", 0.7);
+  const double confidence_min_scale =
+    this->declare_parameter("ekf.confidence_r_min_scale", 0.25);
+  const double confidence_max_scale =
+    this->declare_parameter("ekf.confidence_r_max_scale", 4.0);
+  tracker_ = std::make_unique<Tracker>(
+    max_match_distance, max_match_yaw_diff, confidence_reference,
+    confidence_min_scale, confidence_max_scale);
   tracker_->tracking_thres = this->declare_parameter("tracker.tracking_thres", 5);
   lost_time_thres_ = this->declare_parameter("tracker.lost_time_thres", 0.3);
 

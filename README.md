@@ -35,6 +35,9 @@ Hikrobot 640×640
 当前实车画面没有装甲板目标，因此检测、串口、TF 和跟踪节点频率均已验证，
 但真实目标下的 `tracking=true` 和云台控制闭环仍需复验。
 
+新增回归测试共 9 项，覆盖 PnP 几何/时序门控、长短边交换角度等价、
+640 快速预处理、置信度噪声缩放和 EKF 更新增益。全部通过。
+
 ## 数据流
 
 ```text
@@ -110,6 +113,23 @@ offset_y = (1080 - 640) / 2 = 220
 
 项目使用直接 OpenVINO C++ 推理。OpenCV 负责预处理、OBB 解码、分类别 NMS
 和 PnP。这样避免旧 OpenCV Inference Engine 包装层的性能损失。
+
+640×640、连续内存的 RGB 图像会跳过 resize 和 letterbox，直接生成 DNN blob。
+非 640 输入仍自动执行 letterbox。
+
+### PnP 质量控制
+
+每块装甲板在进入跟踪器前经过：
+
+- 相机前方深度检查
+- 装甲板长宽比检查
+- 四角点重投影误差检查
+- 短时间内的 3D 位置跳变检查
+- 图像中心像素跳变检查
+- 按装甲板长轴归一化后的周期角度检查
+
+长轴角度使用模 `π` 表示，并处理 width/height 互换导致的 90° 表示差异。
+异常结果不会更新连续帧状态，下一次合法检测可以直接恢复。
 
 ### 进程内通信
 
@@ -428,6 +448,20 @@ src/rm_vision_bringup/config/node_params.yaml
 | `dnn.nms_threshold` | 0.5 | 分类别 NMS |
 | `dnn.threads` | 6 | P-core 线程数 |
 
+### PnP 过滤
+
+| 参数 | 当前值 | 说明 |
+|---|---:|---|
+| `filter.max_reprojection_error_px` | 8.0 | 四角点最大重投影误差 |
+| `filter.min_box_aspect` | 1.2 | OBB 长边/短边下限 |
+| `filter.max_box_aspect` | 6.5 | OBB 长边/短边上限 |
+| `filter.min_depth_m` | 0.05 | 相机前方最近距离 |
+| `filter.max_depth_m` | 12.0 | 最大相机深度 |
+| `filter.temporal_gate_seconds` | 0.15 | 连续帧门控窗口 |
+| `filter.max_position_jump_m` | 1.5 | 窗口内最大 3D 跳变 |
+| `filter.max_image_jump_px` | 220.0 | 窗口内最大像素跳变 |
+| `filter.max_angle_jump_rad` | 1.4 | 窗口内最大长轴角度跳变 |
+
 ### 跟踪器
 
 | 参数 | 当前值 |
@@ -439,10 +473,17 @@ src/rm_vision_bringup/config/node_params.yaml
 | `ekf.sigma2_q_r` | 80.0 |
 | `ekf.r_xyz_factor` | 0.0004 |
 | `ekf.r_yaw` | 0.005 |
+| `ekf.confidence_reference` | 0.7 |
+| `ekf.confidence_r_min_scale` | 0.25 |
+| `ekf.confidence_r_max_scale` | 4.0 |
 | `tracker.max_match_distance` | 1.0 m |
 | `tracker.max_match_yaw_diff` | 2.0 rad |
 | `tracker.tracking_thres` | 5 |
 | `tracker.lost_time_thres` | 1.0 s |
+
+Armor 消息携带检测置信度和重投影误差。EKF 测量噪声按
+`(reference / confidence)^2` 缩放并限幅；置信度越高，测量权重越大。
+置信度缺失或小于等于 0 时退回中性倍率 1.0，兼容传统检测器。
 
 ## 精度和性能
 

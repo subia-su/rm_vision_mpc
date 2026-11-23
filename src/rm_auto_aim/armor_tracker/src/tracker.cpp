@@ -2,6 +2,8 @@
 
 #include "armor_tracker/tracker.hpp"
 
+#include "armor_tracker/measurement_noise.hpp"
+
 #include <angles/angles.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -17,13 +19,19 @@
 
 namespace rm_auto_aim
 {
-Tracker::Tracker(double max_match_distance, double max_match_yaw_diff)
+Tracker::Tracker(
+  double max_match_distance, double max_match_yaw_diff,
+  double confidence_reference, double confidence_min_scale,
+  double confidence_max_scale)
 : tracker_state(LOST),
   tracked_id(std::string("")),
   measurement(Eigen::VectorXd::Zero(4)),
   target_state(Eigen::VectorXd::Zero(9)),
   max_match_distance_(max_match_distance),
-  max_match_yaw_diff_(max_match_yaw_diff)
+  max_match_yaw_diff_(max_match_yaw_diff),
+  confidence_reference_(confidence_reference),
+  confidence_min_scale_(confidence_min_scale),
+  confidence_max_scale_(confidence_max_scale)
 {
 }
 
@@ -99,7 +107,10 @@ void Tracker::update(const Armors::SharedPtr & armors_msg)
       // Update EKF
       double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
       measurement = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
-      target_state = ekf.update(measurement);
+      const double noise_scale = confidenceNoiseScale(
+        tracked_armor.confidence, confidence_reference_,
+        confidence_min_scale_, confidence_max_scale_);
+      target_state = ekf.update(measurement, noise_scale);
       RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "EKF update");
     } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
       // Matched armor not found, but there is only one armor with the same id
