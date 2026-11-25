@@ -14,8 +14,27 @@ Hikrobot 640×640
 本地仓库：
 
 ```text
-/home/rm/rm_vision/rm_vision
+/home/rm/rm_vision_mpc/rm_vision
 ```
+
+### 工作区布局
+
+项目使用无括号、无重复嵌套的标准目录结构：
+
+```text
+/home/rm/rm_vision_mpc/
+├── .deps -> /home/rm/rm_vision/.deps
+└── rm_vision/
+    ├── src/
+    ├── tools/
+    ├── build/
+    ├── install/
+    ├── log/
+    └── README.md
+```
+
+兼容入口 `/home/rm/rm_vision/rm_vision` 指向当前标准工作区。迁移前的旧目录保存在
+`/home/rm/rm_vision/rm_vision.legacy-20261124`，不要继续从备份目录构建或启动。
 
 ## 当前验证状态
 
@@ -25,18 +44,20 @@ Hikrobot 640×640
 | 相机输出 | 640×640，46 FPS |
 | 中心 ROI | offset `(400, 220)` |
 | `/detector/armors` | 46.0 FPS |
-| 视觉端延迟 | 约 15.7 ms |
+| 视觉端延迟 | 约 17.4 ms（2026-11-23 分段测试） |
 | Int8 模型 P50 | 11.07 ms |
 | Int8 模型 P95 | 11.50 ms |
 | 视觉容器 CPU | 约 2.4 个逻辑核 |
 | 串口反馈 | 约 100 Hz，CRC errors=0 |
 | 云台 TF | 约 100 Hz |
 
-当前实车画面没有装甲板目标，因此检测、串口、TF 和跟踪节点频率均已验证，
-但真实目标下的 `tracking=true` 和云台控制闭环仍需复验。
+2026-11-23 已完成真实装甲板、串口反馈和 `tracking=true` 链路测试。
+A6 指令与 100 Hz 电控反馈均可运行；PnP 宽高比过严导致的持续拒绝已改为
+软门控。修改后的版本尚未重新完成真实目标与电控闭环复验。
 
 新增回归测试共 9 项，覆盖 PnP 几何/时序门控、长短边交换角度等价、
-640 快速预处理、置信度噪声缩放和 EKF 更新增益。全部通过。
+640 快速预处理、置信度噪声缩放和 EKF 更新增益。PnP、预处理、EKF 和
+串口/MPC 回归测试全部通过。
 
 ## 数据流
 
@@ -55,7 +76,10 @@ yolo26_dnn_detector
 armor_tracker
         │ /tracker/target
         ▼
-rm_serial_driver ──USB CDC──► STM32 电控
+rm_serial_driver: MPC + A6
+        │ USB CDC
+        ▼
+STM32 电控
         ▲
         └──云台 roll/pitch/yaw 反馈
 ```
@@ -69,8 +93,8 @@ odom
               └── camera_optical_frame
 ```
 
-视觉端输出检测、PnP 和 EKF 目标状态。弹道解算、云台闭环和电机控制由
-STM32 端完成。
+视觉端输出检测、PnP、EKF 目标状态和 MPC 轨迹。STM32 根据 A6 轨迹中的
+角度、角速度和角加速度参考执行云台闭环和电机控制。
 
 ## 核心逻辑
 
@@ -122,7 +146,7 @@ offset_y = (1080 - 640) / 2 = 220
 每块装甲板在进入跟踪器前经过：
 
 - 相机前方深度检查
-- 装甲板长宽比检查
+- 装甲板长宽比诊断
 - 四角点重投影误差检查
 - 短时间内的 3D 位置跳变检查
 - 图像中心像素跳变检查
@@ -130,6 +154,10 @@ offset_y = (1080 - 640) / 2 = 220
 
 长轴角度使用模 `π` 表示，并处理 width/height 互换导致的 90° 表示差异。
 异常结果不会更新连续帧状态，下一次合法检测可以直接恢复。
+
+透视、遮挡和近距离大目标会使 OBB 宽高比明显变化。宽高比默认只输出
+`PnP aspect outlier` 告警，不单独拒绝结果；深度、重投影和时序门控仍然生效。
+需要恢复严格拒绝时，将 `filter.reject_invalid_aspect` 设为 `true`。
 
 ### 进程内通信
 
@@ -294,7 +322,7 @@ sudo apt install -y \
 OpenVINO 和 OpenCV 安装在用户依赖目录，不覆盖系统 ROS：
 
 ```bash
-cd /home/rm/rm_vision/rm_vision
+cd /home/rm/rm_vision_mpc/rm_vision
 bash tools/install_openvino.sh
 bash tools/build_opencv_dnn.sh
 ```
@@ -302,8 +330,8 @@ bash tools/build_opencv_dnn.sh
 安装结果：
 
 ```text
-/home/rm/rm_vision/.deps/openvino-2026.4.1
-/home/rm/rm_vision/.deps/opencv-4.12-openvino
+/home/rm/rm_vision_mpc/.deps/openvino-2026.4.1
+/home/rm/rm_vision_mpc/.deps/opencv-4.12-openvino
 ```
 
 系统 ROS 仍使用 OpenCV 4.5.4；YOLO26 Int8 节点使用本地 OpenCV 4.12
@@ -312,7 +340,7 @@ bash tools/build_opencv_dnn.sh
 Python 实验环境：
 
 ```bash
-cd /home/rm/rm_vision/rm_vision/experiments/yolo26_onnx_cpu
+cd /home/rm/rm_vision_mpc/rm_vision/experiments/yolo26_onnx_cpu
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -340,10 +368,22 @@ sudo usermod -aG dialout "$USER"
 ## 构建
 
 ```bash
-cd /home/rm/rm_vision/rm_vision
+cd /home/rm/rm_vision_mpc/rm_vision
 source tools/setup_local.sh
 colcon build --symlink-install --cmake-args -DBUILD_TESTING=OFF
 source tools/setup_local.sh
+```
+
+编译测试版本并运行关键回归：
+
+```bash
+colcon build --symlink-install --cmake-args -DBUILD_TESTING=ON
+ctest --test-dir build/yolo26_dnn_detector --output-on-failure \
+  -R '^test_(pnp_filter|dnn_preprocess)$'
+ctest --test-dir build/armor_tracker --output-on-failure \
+  -R '^test_(measurement_noise|confidence_ekf)$'
+ctest --test-dir build/rm_serial_driver --output-on-failure \
+  -R '^serial_packet_stream_test$'
 ```
 
 `setup_local.sh` 会加载：
@@ -359,7 +399,7 @@ source tools/setup_local.sh
 ### YOLO26 OpenVINO Int8 实时管线
 
 ```bash
-cd /home/rm/rm_vision/rm_vision
+cd /home/rm/rm_vision_mpc/rm_vision
 source tools/setup_local.sh
 ros2 launch rm_vision_bringup yolo26_cpu_bringup.launch.py
 ```
@@ -378,7 +418,7 @@ armor_tracker
 ### 传统 CV / TensorRT 管线
 
 ```bash
-cd /home/rm/rm_vision/rm_vision
+cd /home/rm/rm_vision_mpc/rm_vision
 source tools/setup_local.sh
 ros2 launch rm_vision_bringup vision_bringup.launch.py
 ```
@@ -391,7 +431,7 @@ ros2 launch rm_vision_bringup vision_bringup.launch.py
 ### 无硬件模式
 
 ```bash
-cd /home/rm/rm_vision/rm_vision
+cd /home/rm/rm_vision_mpc/rm_vision
 source tools/setup_local.sh
 ros2 launch rm_vision_bringup no_hardware.launch.py
 ```
@@ -439,6 +479,29 @@ src/rm_vision_bringup/config/node_params.yaml
 | `stop_bits` | 1 |
 | `timestamp_offset` | 0.006 s |
 
+### MPC 与 A6 轨迹
+
+| 参数 | 当前值 | 说明 |
+|---|---:|---|
+| `mpc.horizon` | 100 | 预测点数 |
+| `mpc.dt` | 0.01 s | 预测步长 |
+| `mpc.yaw_speed_limit` | 5.0 rad/s | Yaw 速度上限 |
+| `mpc.pitch_speed_limit` | 0.6 rad/s | Pitch 速度上限 |
+| `mpc.yaw_acc_limit` | 20.0 rad/s² | Yaw 加速度上限 |
+| `mpc.pitch_acc_limit` | 8.0 rad/s² | Pitch 加速度上限 |
+| `mpc.angle_weight` | 30.0 | 角度误差权重 |
+| `mpc.speed_weight` | 0.8 | 速度误差权重 |
+| `mpc.acceleration_weight` | 0.04 | 加速度权重 |
+| `mpc.jerk_weight` | 0.2 | 加速度变化权重 |
+| `aim.bullet_speed` | 25.0 m/s | 弹速 |
+| `aim.system_delay` | 0.03 s | 系统延迟 |
+| `aim.gravity` | 9.80665 m/s² | 重力加速度 |
+| `trajectory.ttl_ms` | 40 ms | A6 指令有效期 |
+| `trajectory.transport_age_ms` | 2 ms | 估计传输延迟 |
+
+没有有效跟踪目标时仍以约 46 Hz 发送 `valid=false` 的 A6 心跳。
+电控侧必须支持 38 字节、小端浮点 A6 报文并检查 TTL。
+
 ### OpenVINO Int8 检测器
 
 | 参数 | 当前值 | 说明 |
@@ -461,6 +524,11 @@ src/rm_vision_bringup/config/node_params.yaml
 | `filter.max_position_jump_m` | 1.5 | 窗口内最大 3D 跳变 |
 | `filter.max_image_jump_px` | 220.0 | 窗口内最大像素跳变 |
 | `filter.max_angle_jump_rad` | 1.4 | 窗口内最大长轴角度跳变 |
+| `filter.reject_invalid_aspect` | false | 宽高比异常时是否直接拒绝 |
+
+透视和遮挡会显著改变 OBB 宽高比，因此宽高比默认只记录告警，
+实际结果继续经过深度、重投影和时序检查。需要恢复严格门控时，将
+`filter.reject_invalid_aspect` 设为 `true`。
 
 ### 跟踪器
 
@@ -515,10 +583,13 @@ Accuracy Control 将基础 PTQ 的 mAP 降幅从 0.0141 改善到 0.0059。
 ```text
 /image_raw:        46 FPS
 /detector/armors:  46 FPS
-端到端延迟:      约 15.7 ms
+端到端延迟:      约 17.4 ms
 视觉容器 CPU:    约 2.4 核
 云台 TF:          100 Hz
 ```
+
+以上延迟为 2026-11-23 分段测试结果。额外开启原始图监控窗口会增加
+DDS 搬运和重复解码开销，可能使延迟明显升高。
 
 性能文件：
 
@@ -529,7 +600,7 @@ experiments/yolo26_onnx_cpu/results/
 ## Int8 复现
 
 ```bash
-cd /home/rm/rm_vision/rm_vision
+cd /home/rm/rm_vision_mpc/rm_vision
 source ../.deps/openvino-2026.4.1/setupvars.sh
 cd experiments/yolo26_onnx_cpu
 
@@ -560,6 +631,7 @@ cd experiments/yolo26_onnx_cpu
 | `/tracker/target` | `auto_aim_interfaces/Target` | EKF 目标 |
 | `/tracker/info` | `auto_aim_interfaces/TrackerInfo` | 跟踪残差 |
 | `/latency` | `std_msgs/Float64` | 视觉到串口延迟 |
+| `/serial_driver/trajectory` | `std_msgs/Float64MultiArray` | 实际发送的 A6 轨迹调试字段 |
 | `/tf` | `tf2_msgs/TFMessage` | 云台和相机 TF |
 | `/aiming_point` | `visualization_msgs/Marker` | 瞄准点 |
 
@@ -581,27 +653,46 @@ ros2 topic hz /tracker/target
 ros2 topic echo /detector/armors --once
 ros2 topic echo /tracker/target --once
 ros2 topic echo /latency --once
+ros2 topic echo /serial_driver/trajectory --once
 ros2 run tf2_ros tf2_echo odom gimbal_link
 ```
 
 `setup_local.sh` 默认设置 `ROS_LOCALHOST_ONLY=1`。
 
-## 串口协议
+持续监控通信连续性：
 
-实现：
+```bash
+source tools/setup_local.sh
+python3 tools/link_monitor.py --duration 30
+```
+
+每秒输出 TF 间隔、云台反馈步长、目标消息间隔、A6 发送间隔和
+`valid` 切换次数，并写入 `logs/link_monitor.csv`。该工具只读，不发布控制量。
+
+`/serial_driver/trajectory` 的 `data` 顺序：
 
 ```text
-src/rm_serial_driver/include/rm_serial_driver/packet.hpp
+valid, sequence, host_ms, age_ms, ttl_ms,
+yaw, pitch, yaw_speed, pitch_speed, yaw_acc, pitch_acc
+```
+
+## 串口协议
+
+实时下发实现：
+
+```text
+src/rm_serial_driver/include/rm_serial_driver/trajectory_packet.hpp
 ```
 
 配置：115200、8N1、无流控。
 
-所有浮点字段按 `int16 ×100` 小端传输。
+电控反馈沿用 16 字节 `0x5A` 帧。视觉实时下发使用 38 字节 `0xA6`
+轨迹帧，字段为小端序。
 
 | 方向 | 帧头 | 长度 | 内容 |
 |---|---:|---:|---|
 | 电控 → 视觉 | `0x5A` | 16 B | flags + 6×int16 + CRC |
-| 视觉 → 电控 | `0xA5` | 26 B | flags + 11×int16 + CRC |
+| 视觉 → 电控 | `0xA6` | 38 B | flags + 时间戳 + 6×float32 + CRC |
 
 CRC：
 
@@ -617,15 +708,23 @@ final xor:            none
 roll, pitch, yaw, aim_x, aim_y, aim_z
 ```
 
-下行：
+A6 下行：
 
 ```text
-x, y, z, yaw, vx, vy, vz, v_yaw, r1, r2, dz
+valid, sequence, host_ms, age_ms, ttl_ms,
+yaw, pitch, yaw_speed, pitch_speed, yaw_acc, pitch_acc
 ```
 
-下行内容是 EKF 后的目标状态，不是云台角度或弹道解算结果。
+完整字节布局见 [docs/mpc_trajectory_integration.md](docs/mpc_trajectory_integration.md)。
 
-驱动会处理拆包、合包、短写和 CRC 错误，并持续写完完整 26 字节下行帧。
+驱动会处理反馈拆包、合包、CRC 恢复和短写。没有有效目标时仍以约
+46 Hz 发送 `valid=false` 的 A6 心跳，由下位机按 `ttl_ms` 丢弃旧轨迹。
+`packet.hpp` 中的 `0xA5` 目标状态帧仅作为遗留协议保留，不再是实时入口。
+
+串口断线重连使用端口代次和互斥锁协调。接收线程与发送线程同时检测到
+USB 断开时，只有第一个线程执行 `close/open` 和重试；另一个线程复用同一次
+重连结果。节点退出时先置关机标志并释放被阻塞的读操作，避免关闭阶段重复
+重开串口。
 
 ## 相机标定
 
@@ -801,9 +900,57 @@ rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*
 
 然后重启全部 ROS 进程。
 
+### PnP 持续出现 box_aspect 拒绝
+
+旧版会将 OBB 宽高比异常直接作为致命错误。当前默认行为是：
+
+```text
+PnP aspect outlier (<number>): aspect=<value> accepted provisionally
+```
+
+结果会继续经过深度、重投影和时序门控。若仍看到
+`Rejected PnP result (...): box_aspect`，说明配置中启用了严格模式：
+
+```bash
+ros2 param get /armor_detector filter.reject_invalid_aspect
+ros2 param set /armor_detector filter.reject_invalid_aspect false
+```
+
+同时确认启动路径为：
+
+```bash
+/home/rm/rm_vision_mpc/rm_vision/install
+```
+
+而不是历史安装目录。
+
+### 目标跟踪正常但云台不动
+
+依次确认：
+
+```bash
+ros2 topic echo /tracker/target --once
+ros2 topic hz /tf
+ros2 param get /serial_driver trajectory.ttl_ms
+```
+
+预期 `tracking=true`、TF 约 100 Hz、TTL 为 40 ms。电控端还必须确认：
+
+- 固件已实现 38 字节 `0xA6` 解析
+- `sequence`、`valid`、`ttl_ms` 和 CRC 校验通过
+- 联调模式允许自动执行，而不是仅处于 `C_MANUAL_TEST=1u`
+- 电机已使能，A6 执行分支没有被安全条件屏蔽
+
+如果视觉端 A6 `valid=1` 且 yaw 指令变化，但云台不动作，应优先排查下位机
+协议接入和执行模式。
+
 ## 已知限制
 
-- 尚未在真实装甲板目标前完成 `tracking=true` 和电控闭环验证。
+- 已观察到真实目标 `tracking=true`，但 PnP 修复后的目标丢失率和电控闭环
+  尚未重新完成完整复验。
+- 近距目标下半径估计和 yaw 速度仍可能抖动，需要继续调参。
+- MPC 轨迹参考存在一步索引偏差，当前版本尚未修复。
+- 电控端必须正确解析 A6；若固件仍只解析旧 A5 报文，云台不会执行轨迹。
 - 36 类数据分布不均衡，部分前哨站、基地和 baseline 类别验证样本极少。
 - 当前现场光照和 6000 μs 曝光下画面偏暗，远距离召回不足时先调曝光和增益。
 - TensorRT 模式需要 CUDA、TensorRT 和匹配设备的 engine。

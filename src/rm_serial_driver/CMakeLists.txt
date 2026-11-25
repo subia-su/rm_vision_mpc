@@ -25,6 +25,7 @@ ament_auto_find_build_dependencies()
 
 ament_auto_add_library(${PROJECT_NAME} SHARED
   src/rm_serial_driver.cpp
+  src/mpc_planner.cpp
   src/crc.cpp
 )
 
@@ -41,6 +42,7 @@ if(BUILD_TESTING)
   enable_testing()
   add_executable(serial_packet_stream_test
     test/test_packet_stream_standalone.cpp
+    src/mpc_planner.cpp
     src/crc.cpp
   )
   target_include_directories(serial_packet_stream_test PRIVATE

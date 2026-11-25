@@ -50,10 +50,14 @@ PnpFilterResult PnpFilter::evaluate(
     return result;
   }
   const double aspect = long_edge / short_edge;
+  result.box_aspect = aspect;
   if (aspect < config_.min_box_aspect || aspect > config_.max_box_aspect) {
-    result.reason = "box_aspect";
-    ++rejected_count_;
-    return result;
+    result.aspect_outlier = true;
+    if (config_.reject_invalid_aspect) {
+      result.reason = "box_aspect";
+      ++rejected_count_;
+      return result;
+    }
   }
 
   const double x = translation_vector.at<double>(0);

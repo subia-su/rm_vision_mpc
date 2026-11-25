@@ -55,7 +55,7 @@ TEST(PnpFilter, AcceptsValidProjectionAndImage)
   EXPECT_LT(result.reprojection_error_px, 1e-6);
 }
 
-TEST(PnpFilter, RejectsBadAspectAndDepth)
+TEST(PnpFilter, AspectOutlierIsSoftByDefaultAndCanBeStrict)
 {
   rm_auto_aim::PnpFilter filter(rm_auto_aim::PnpFilterConfig{});
   const auto objects = objectPoints();
@@ -66,8 +66,18 @@ TEST(PnpFilter, RejectsBadAspectAndDepth)
   const auto aspect = filter.evaluate(
     "1", 10.0, 20.0, 18.0, cv::Point2f(320.0F, 320.0F), 0.0,
     rvec, tvec, cameraMatrix(), cv::Mat(), objects, image_points);
-  EXPECT_FALSE(aspect.accepted);
-  EXPECT_EQ(aspect.reason, "box_aspect");
+  EXPECT_TRUE(aspect.accepted);
+  EXPECT_TRUE(aspect.aspect_outlier);
+  EXPECT_NEAR(aspect.box_aspect, 20.0 / 18.0, 1e-6);
+
+  rm_auto_aim::PnpFilterConfig strict_config;
+  strict_config.reject_invalid_aspect = true;
+  rm_auto_aim::PnpFilter strict_filter(strict_config);
+  const auto strict_aspect = strict_filter.evaluate(
+    "1", 10.0, 20.0, 18.0, cv::Point2f(320.0F, 320.0F), 0.0,
+    rvec, tvec, cameraMatrix(), cv::Mat(), objects, image_points);
+  EXPECT_FALSE(strict_aspect.accepted);
+  EXPECT_EQ(strict_aspect.reason, "box_aspect");
 
   cv::Mat negative_depth = (cv::Mat_<double>(3, 1) << 0.0, 0.0, -2.0);
   const auto depth = filter.evaluate(

@@ -9,7 +9,7 @@
   --mode window  原生 OpenCV 窗口（需要接显示器 / X11）
 
 用法：
-  cd /home/rm/rm_vision/rm_vision && source tools/setup_local.sh
+  cd /home/rm/rm_vision_mpc/rm_vision && source tools/setup_local.sh
   python3 camera_monitor.py                 # 网页模式，端口 8080
   python3 camera_monitor.py --port 8090
   python3 camera_monitor.py --mode window   # 有显示器时

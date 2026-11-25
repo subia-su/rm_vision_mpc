@@ -3,12 +3,15 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <limits>
 #include <vector>
 
 #include "rm_serial_driver/packet_stream.hpp"
+#include "rm_serial_driver/mpc_planner.hpp"
+#include "rm_serial_driver/trajectory_packet.hpp"
 
 using rm_serial_driver::fromVector;
 using rm_serial_driver::ReceivePacket;
@@ -17,6 +20,12 @@ using rm_serial_driver::sendPacketFully;
 using rm_serial_driver::SendPacket;
 using rm_serial_driver::to_fixed16;
 using rm_serial_driver::toVector;
+using rm_serial_driver::AimReference;
+using rm_serial_driver::MpcLimits;
+using rm_serial_driver::MpcPlanner;
+using rm_serial_driver::MpcWeights;
+using rm_serial_driver::pack_trajectory;
+using rm_serial_driver::TrajectoryCommand;
 
 static std::vector<uint8_t> feedback()
 {
@@ -126,6 +135,54 @@ int main()
   try { sendPacketFully(data, [](const std::vector<uint8_t> &) { return std::size_t{0}; }); }
   catch (const std::runtime_error &) { failed = true; }
   assert(failed);
+  TrajectoryCommand trajectory;
+  trajectory.valid = true; trajectory.sequence = 0x1234; trajectory.host_ms = 0x78563412;
+  trajectory.age_ms = 2; trajectory.ttl_ms = 40;
+  trajectory.yaw = 1.0F; trajectory.pitch = -0.25F;
+  trajectory.yaw_speed = 2.0F; trajectory.pitch_speed = -0.5F;
+  trajectory.yaw_acc = 10.0F; trajectory.pitch_acc = -4.0F;
+  const auto a6 = pack_trajectory(trajectory);
+  assert(a6.size() == 38 && a6[0] == 0xA6 && a6[1] == 1);
+  assert(a6[2] == 0x34 && a6[3] == 0x12 && a6[4] == 0x12 && a6[7] == 0x78);
+  assert(a6[8] == 2 && a6[10] == 40);
+  assert(crc16::Verify_CRC16_Check_Sum(a6.data(), a6.size()));
+
+  MpcLimits limits; MpcWeights weights;
+  MpcPlanner planner(100, 0.01, limits, weights);
+  std::vector<AimReference> references;
+  for (unsigned i = 0; i < 100; ++i) references.emplace_back(0.5, -0.2);
+  const auto planned = planner.solve(references);
+  assert(planned.yaw > 0.0 && planned.pitch < 0.0);
+  assert(std::abs(planned.yaw_speed) <= limits.yaw_speed);
+  assert(std::abs(planned.pitch_speed) <= limits.pitch_speed);
+  assert(std::abs(planned.yaw_acc) <= limits.yaw_acc);
+  assert(std::abs(planned.pitch_acc) <= limits.pitch_acc);
+
+  references.clear();
+  const double pi = std::acos(-1.0);
+  for (unsigned i = 0; i < 100; ++i) {
+    const double unwrapped = pi - 0.04 + 0.001 * i;
+    references.emplace_back(std::remainder(unwrapped, 2.0 * pi), 0.0);
+  }
+  const auto wrapped = planner.solve(references);
+  assert(std::isfinite(wrapped.yaw));
+  assert(std::abs(wrapped.yaw_speed) <= limits.yaw_speed + 1.0e-9);
+  assert(std::abs(wrapped.yaw_acc) <= limits.yaw_acc + 1.0e-9);
+
+  bool bad_config_rejected = false;
+  try {
+    MpcLimits invalid_limits = limits;
+    invalid_limits.pitch_acc = 0.0;
+    MpcPlanner invalid(100, 0.01, invalid_limits, weights);
+    (void)invalid;
+  } catch (const std::invalid_argument &) { bad_config_rejected = true; }
+  assert(bad_config_rejected);
+
+  references[5].yaw = std::numeric_limits<double>::quiet_NaN();
+  bool nan_reference_rejected = false;
+  try { (void)planner.solve(references); }
+  catch (const std::invalid_argument &) { nan_reference_rejected = true; }
+  assert(nan_reference_rejected);
   failed = false;
   try {
     sendPacketFully(data, [](const std::vector<uint8_t> & remaining) {

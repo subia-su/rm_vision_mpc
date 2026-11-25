@@ -20,6 +20,24 @@
     flow_control: none
     parity: none
     stop_bits: "1"
+    # Upper-level MPC and A6 trajectory packet settings.
+    mpc.horizon: 100
+    mpc.dt: 0.01
+    mpc.yaw_speed_limit: 5.0
+    mpc.pitch_speed_limit: 0.6
+    mpc.yaw_acc_limit: 20.0
+    mpc.pitch_acc_limit: 8.0
+    mpc.pitch_min: -0.39
+    mpc.pitch_max: 0.07
+    mpc.angle_weight: 30.0
+    mpc.speed_weight: 0.8
+    mpc.acceleration_weight: 0.04
+    mpc.jerk_weight: 0.2
+    aim.bullet_speed: 25.0
+    aim.system_delay: 0.03
+    aim.gravity: 9.80665
+    trajectory.ttl_ms: 40
+    trajectory.transport_age_ms: 2
 
 /armor_detector:
   ros__parameters:
@@ -50,6 +68,9 @@
     filter.max_position_jump_m: 1.5
     filter.max_image_jump_px: 220.0
     filter.max_angle_jump_rad: 1.4
+    # OBB aspect can change substantially under perspective. Keep it as a
+    # diagnostic by default and rely on depth, reprojection and temporal gates.
+    filter.reject_invalid_aspect: false
 
     detect_color: 0
     binary_thres: 30

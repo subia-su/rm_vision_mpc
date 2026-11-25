@@ -25,6 +25,7 @@ struct PnpFilterConfig
   double max_position_jump_m = 1.5;
   double max_image_jump_px = 220.0;
   double max_angle_jump_rad = 1.4;
+  bool reject_invalid_aspect = false;
 };
 
 struct PnpFilterResult
@@ -34,6 +35,8 @@ struct PnpFilterResult
   double position_jump_m = 0.0;
   double image_jump_px = 0.0;
   double angle_jump_rad = 0.0;
+  double box_aspect = 0.0;
+  bool aspect_outlier = false;
   std::string reason;
 };
 

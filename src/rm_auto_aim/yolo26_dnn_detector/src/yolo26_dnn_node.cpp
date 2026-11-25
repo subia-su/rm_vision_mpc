@@ -175,6 +175,8 @@ public:
       this->declare_parameter("filter.max_image_jump_px", 220.0);
     filter_config.max_angle_jump_rad =
       this->declare_parameter("filter.max_angle_jump_rad", 1.4);
+    filter_config.reject_invalid_aspect =
+      this->declare_parameter("filter.reject_invalid_aspect", false);
     pnp_filter_ = std::make_unique<PnpFilter>(filter_config);
 
     if (use_openvino) {
@@ -261,11 +263,19 @@ private:
         if (!filter_result.accepted) {
           RCLCPP_WARN_THROTTLE(
             this->get_logger(), *this->get_clock(), 1000,
-            "Rejected PnP result (%s): %s reproj=%.2fpx jump=%.2fm %.1fpx %.2frad",
+            "Rejected PnP result (%s): %s aspect=%.2f reproj=%.2fpx "
+            "jump=%.2fm %.1fpx %.2frad",
             metadata.number.c_str(), filter_result.reason.c_str(),
-            filter_result.reprojection_error_px, filter_result.position_jump_m,
+            filter_result.box_aspect, filter_result.reprojection_error_px,
+            filter_result.position_jump_m,
             filter_result.image_jump_px, filter_result.angle_jump_rad);
           continue;
+        }
+        if (filter_result.aspect_outlier) {
+          RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 1000,
+            "PnP aspect outlier (%s): aspect=%.2f accepted provisionally",
+            metadata.number.c_str(), filter_result.box_aspect);
         }
 
         cv::Mat rotation_matrix;

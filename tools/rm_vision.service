@@ -5,13 +5,13 @@ After=network.target multi-user.target
 [Service]
 Type=simple
 User=rm
-ExecStart=/home/rm/rm_vision/rm_vision/tools/auto_start.sh
+ExecStart=/home/rm/rm_vision_mpc/rm_vision/tools/auto_start.sh
 Restart=on-failure
 RestartSec=5
 Environment=HOME=/home/rm
 Environment=ROS_DISTRO=humble
-Environment=ROS_HOME=/home/rm/rm_vision/rm_vision/.ros
-Environment=ROS_LOG_DIR=/home/rm/rm_vision/rm_vision/logs/ros
+Environment=ROS_HOME=/home/rm/rm_vision_mpc/rm_vision/.ros
+Environment=ROS_LOG_DIR=/home/rm/rm_vision_mpc/rm_vision/logs/ros
 
 [Install]
 WantedBy=multi-user.target

@@ -10,11 +10,12 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 // C++ system
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <memory>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "rm_serial_driver/packet.hpp"
 #include "rm_serial_driver/packet_stream.hpp"
 #include "rm_serial_driver/rm_serial_driver.hpp"
+#include "rm_serial_driver/trajectory_packet.hpp"
 
 namespace rm_serial_driver
 {
@@ -34,12 +36,40 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
 
   getParams();
 
+  mpc_horizon_ = static_cast<std::size_t>(declare_parameter<int>("mpc.horizon", 100));
+  mpc_dt_ = declare_parameter("mpc.dt", 0.01);
+  bullet_speed_ = declare_parameter("aim.bullet_speed", 25.0);
+  system_delay_ = declare_parameter("aim.system_delay", 0.03);
+  gravity_ = declare_parameter("aim.gravity", 9.80665);
+  trajectory_ttl_ms_ = static_cast<uint16_t>(declare_parameter<int>("trajectory.ttl_ms", 40));
+  transport_age_ms_ = static_cast<uint16_t>(declare_parameter<int>("trajectory.transport_age_ms", 2));
+  pitch_min_ = declare_parameter("mpc.pitch_min", -0.39);
+  pitch_max_ = declare_parameter("mpc.pitch_max", 0.07);
+  MpcLimits limits;
+  limits.yaw_speed = declare_parameter("mpc.yaw_speed_limit", 5.0);
+  limits.pitch_speed = declare_parameter("mpc.pitch_speed_limit", 0.6);
+  limits.yaw_acc = declare_parameter("mpc.yaw_acc_limit", 20.0);
+  limits.pitch_acc = declare_parameter("mpc.pitch_acc_limit", 8.0);
+  MpcWeights weights;
+  weights.angle = declare_parameter("mpc.angle_weight", 30.0);
+  weights.speed = declare_parameter("mpc.speed_weight", 0.8);
+  weights.acceleration = declare_parameter("mpc.acceleration_weight", 0.04);
+  weights.acceleration_delta = declare_parameter("mpc.jerk_weight", 0.2);
+  if (bullet_speed_ <= 1.0 || trajectory_ttl_ms_ == 0 || trajectory_ttl_ms_ > 50 ||
+    transport_age_ms_ > 50 || pitch_min_ >= pitch_max_)
+  {
+    throw std::invalid_argument("invalid ballistic or A6 freshness parameters");
+  }
+  mpc_ = std::make_unique<MpcPlanner>(mpc_horizon_, mpc_dt_, limits, weights);
+
   // TF broadcaster
   timestamp_offset_ = this->declare_parameter("timestamp_offset", 0.0);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
   // Create Publisher
   latency_pub_ = this->create_publisher<std_msgs::msg::Float64>("/latency", 10);
+  trajectory_pub_ =
+    this->create_publisher<std_msgs::msg::Float64MultiArray>("/serial_driver/trajectory", 10);
   marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/aiming_point", 10);
 
   // Detect parameter client
@@ -79,12 +109,17 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
 
 RMSerialDriver::~RMSerialDriver()
 {
-  if (receive_thread_.joinable()) {
-    receive_thread_.join();
+  shutting_down_.store(true, std::memory_order_release);
+  {
+    std::lock_guard<std::mutex> reconnect_lock(reopen_mutex_);
+    // Closing the port releases receive() so the worker can observe shutdown.
+    if (serial_driver_->port()->is_open()) {
+      serial_driver_->port()->close();
+    }
   }
 
-  if (serial_driver_->port()->is_open()) {
-    serial_driver_->port()->close();
+  if (receive_thread_.joinable()) {
+    receive_thread_.join();
   }
 
   if (owned_ctx_) {
@@ -98,6 +133,7 @@ void RMSerialDriver::receiveData()
   ReceivePacketParser parser;
 
   while (rclcpp::ok()) {
+    const auto observed_revision = port_revision_.load(std::memory_order_acquire);
     try {
       // read_some may return a fragment, one packet, or several packets.
       const auto received = serial_driver_->port()->receive(data);
@@ -140,45 +176,103 @@ void RMSerialDriver::receiveData()
       RCLCPP_ERROR_THROTTLE(
         get_logger(), *get_clock(), 20, "Error while receiving data: %s", ex.what());
       parser.reset();
-      reopenPort();
+      reopenPort(observed_revision);
     }
   }
 }
 
 void RMSerialDriver::sendData(const auto_aim_interfaces::msg::Target::SharedPtr msg)
 {
-  static const std::map<std::string, uint8_t> id_unit8_map{
-    {"", 0},  {"outpost", 0}, {"1", 1},     {"2", 2},
-    {"3", 3}, {"4", 4},       {"5", 5}, {"guard", 6}, {"base", 7}};
-
+  const auto observed_revision = port_revision_.load(std::memory_order_acquire);
   try {
-    SendPacket packet{};
-    if (msg->tracking && msg->armors_num != 2 && msg->armors_num != 3 &&
-      msg->armors_num != 4)
+    TrajectoryCommand command;
+    command.sequence = ++trajectory_sequence_;
+    command.host_ms = static_cast<uint32_t>(this->now().nanoseconds() / 1000000LL);
+    command.ttl_ms = trajectory_ttl_ms_;
+    const double message_age = std::max(0.0, (this->now() - msg->header.stamp).seconds());
+    command.age_ms = transport_age_ms_;
+    if (msg->tracking &&
+      (msg->armors_num == 2 || msg->armors_num == 3 || msg->armors_num == 4))
     {
-      throw std::domain_error("Tracking target must contain 2, 3 or 4 armors");
+      std::vector<AimReference> reference;
+      reference.reserve(mpc_horizon_);
+      for (std::size_t k = 0; k < mpc_horizon_; ++k) {
+        double flight = 0.0, x = 0.0, y = 0.0, z = 0.0;
+        for (unsigned iteration = 0; iteration < 3; ++iteration) {
+          const double t = message_age + system_delay_ +
+            (static_cast<double>(k) - static_cast<double>(mpc_horizon_ / 2)) * mpc_dt_ + flight;
+          const double center_x = msg->position.x + msg->velocity.x * t;
+          const double center_y = msg->position.y + msg->velocity.y * t;
+          const double center_z = msg->position.z + msg->velocity.z * t;
+          double best_distance = std::numeric_limits<double>::infinity();
+          for (int armor = 0; armor < msg->armors_num; ++armor) {
+            const double armor_yaw = msg->yaw + msg->v_yaw * t +
+              armor * 2.0 * std::acos(-1.0) / msg->armors_num;
+            const bool alternate = msg->armors_num == 4 && (armor & 1);
+            const double radius = alternate ? msg->radius_2 : msg->radius_1;
+            const double candidate_x = center_x - radius * std::cos(armor_yaw);
+            const double candidate_y = center_y - radius * std::sin(armor_yaw);
+            const double candidate_z = center_z + (alternate ? msg->dz : 0.0);
+            const double distance = candidate_x * candidate_x + candidate_y * candidate_y +
+              candidate_z * candidate_z;
+            if (distance < best_distance) {
+              best_distance = distance;
+              x = candidate_x; y = candidate_y; z = candidate_z;
+            }
+          }
+          flight = std::hypot(std::hypot(x, y), z) / bullet_speed_;
+        }
+        const double horizontal = std::hypot(x, y);
+        if (horizontal < 0.05) throw std::domain_error("target is too close");
+        const double v2 = bullet_speed_ * bullet_speed_;
+        const double discriminant = v2 * v2 - gravity_ *
+          (gravity_ * horizontal * horizontal + 2.0 * z * v2);
+        if (!std::isfinite(discriminant) || discriminant <= 0.0) {
+          throw std::domain_error("target has no ballistic solution");
+        }
+        const double elevation =
+          std::atan((v2 - std::sqrt(discriminant)) / (gravity_ * horizontal));
+        reference.push_back({std::atan2(y, x), -elevation});
+      }
+      const PlannedState plan = mpc_->solve(reference);
+      command.valid = true;
+      command.yaw = static_cast<float>(plan.yaw);
+      command.pitch = static_cast<float>(plan.pitch);
+      command.yaw_speed = static_cast<float>(plan.yaw_speed);
+      command.pitch_speed = static_cast<float>(plan.pitch_speed);
+      command.yaw_acc = static_cast<float>(plan.yaw_acc);
+      command.pitch_acc = static_cast<float>(plan.pitch_acc);
+      if (command.pitch < pitch_min_ || command.pitch > pitch_max_) {
+        command.pitch = static_cast<float>(std::max(pitch_min_, std::min(pitch_max_,
+          static_cast<double>(command.pitch))));
+        command.pitch_speed = 0.0F;
+        command.pitch_acc = 0.0F;
+      }
+    } else {
+      mpc_->reset();
     }
-    packet.tracking = msg->tracking;
-    packet.id = id_unit8_map.at(msg->id);
-    packet.armors_num = msg->armors_num;
-    // float 转 int16 定点（×100）
-    packet.x = to_fixed16(msg->position.x);
-    packet.y = to_fixed16(msg->position.y);
-    packet.z = to_fixed16(msg->position.z);
-    // The tracker unwraps yaw internally; send its equivalent bounded angle.
-    packet.yaw = to_fixed16(std::remainder(msg->yaw, 2.0 * std::acos(-1.0)));
-    packet.vx = to_fixed16(msg->velocity.x);
-    packet.vy = to_fixed16(msg->velocity.y);
-    packet.vz = to_fixed16(msg->velocity.z);
-    packet.v_yaw = to_fixed16(msg->v_yaw);
-    packet.r1 = to_fixed16(msg->radius_1);
-    packet.r2 = to_fixed16(msg->radius_2);
-    packet.dz = to_fixed16(msg->dz);
-    std::vector<uint8_t> data = toVector(packet);
+    const auto packed = pack_trajectory(command);
+    const std::vector<uint8_t> data(packed.begin(), packed.end());
 
     sendPacketFully(data, [this](const std::vector<uint8_t> & remaining) {
       return serial_driver_->port()->send(remaining);
     });
+
+    std_msgs::msg::Float64MultiArray trajectory_debug;
+    trajectory_debug.data = {
+      command.valid ? 1.0 : 0.0,
+      static_cast<double>(command.sequence),
+      static_cast<double>(command.host_ms),
+      static_cast<double>(command.age_ms),
+      static_cast<double>(command.ttl_ms),
+      static_cast<double>(command.yaw),
+      static_cast<double>(command.pitch),
+      static_cast<double>(command.yaw_speed),
+      static_cast<double>(command.pitch_speed),
+      static_cast<double>(command.yaw_acc),
+      static_cast<double>(command.pitch_acc),
+    };
+    trajectory_pub_->publish(trajectory_debug);
 
     std_msgs::msg::Float64 latency;
     latency.data = (this->now() - msg->header.stamp).seconds() * 1000.0;
@@ -190,7 +284,7 @@ void RMSerialDriver::sendData(const auto_aim_interfaces::msg::Target::SharedPtr 
       get_logger(), *get_clock(), 1000, "Rejected target packet: %s", ex.what());
   } catch (const std::exception & ex) {
     RCLCPP_ERROR(get_logger(), "Error while sending data: %s", ex.what());
-    reopenPort();
+    reopenPort(observed_revision);
   }
 }
 
@@ -275,21 +369,30 @@ void RMSerialDriver::getParams()
     std::make_unique<drivers::serial_driver::SerialPortConfig>(baud_rate, fc, pt, sb);
 }
 
-void RMSerialDriver::reopenPort()
+void RMSerialDriver::reopenPort(std::uint64_t observed_revision)
 {
-  RCLCPP_WARN(get_logger(), "Attempting to reopen port");
-  try {
-    if (serial_driver_->port()->is_open()) {
-      serial_driver_->port()->close();
+  std::unique_lock<std::mutex> reconnect_lock(reopen_mutex_);
+  if (
+    shutting_down_.load(std::memory_order_acquire) ||
+    port_revision_.load(std::memory_order_acquire) != observed_revision)
+  {
+    return;
+  }
+
+  while (rclcpp::ok() && !shutting_down_.load(std::memory_order_acquire)) {
+    RCLCPP_WARN(get_logger(), "Attempting to reopen port");
+    try {
+      if (serial_driver_->port()->is_open()) {
+        serial_driver_->port()->close();
+      }
+      serial_driver_->port()->open();
+      port_revision_.fetch_add(1, std::memory_order_release);
+      RCLCPP_INFO(get_logger(), "Successfully reopened port");
+      return;
+    } catch (const std::exception & ex) {
+      RCLCPP_ERROR(get_logger(), "Error while reopening port: %s", ex.what());
     }
-    serial_driver_->port()->open();
-    RCLCPP_INFO(get_logger(), "Successfully reopened port");
-  } catch (const std::exception & ex) {
-    RCLCPP_ERROR(get_logger(), "Error while reopening port: %s", ex.what());
-    if (rclcpp::ok()) {
-      rclcpp::sleep_for(std::chrono::seconds(1));
-      reopenPort();
-    }
+    rclcpp::sleep_for(std::chrono::seconds(1));
   }
 }
 
