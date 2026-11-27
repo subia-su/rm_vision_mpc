@@ -4,6 +4,7 @@ install/
 log/
 .ros/
 logs/
+dist/
 
 # Imported training data and experiment environments
 datasets/yolo26_obb/images/

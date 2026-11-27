@@ -13,6 +13,7 @@
 #include <serial_driver/serial_driver.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 
@@ -28,6 +29,7 @@
 
 #include "auto_aim_interfaces/msg/target.hpp"
 #include "rm_serial_driver/mpc_planner.hpp"
+#include "rm_serial_driver/world_trajectory_contract.hpp"
 
 namespace rm_serial_driver
 {
@@ -79,6 +81,7 @@ private:
   // For debug usage
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr latency_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr trajectory_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr planner_status_pub_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
 
   std::thread receive_thread_;
@@ -89,8 +92,7 @@ private:
   uint16_t trajectory_sequence_ = 0;
   std::size_t mpc_horizon_ = 100;
   double mpc_dt_ = 0.01, bullet_speed_ = 25.0, system_delay_ = 0.03, gravity_ = 9.80665;
-  double pitch_min_ = -0.39, pitch_max_ = 0.07;
-  uint16_t trajectory_ttl_ms_ = 40, transport_age_ms_ = 2;
+  WorldTrajectoryPolicy trajectory_policy_;
 };
 }  // namespace rm_serial_driver
 
