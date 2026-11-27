@@ -1,0 +1,585 @@
+{
+  "schema": 1,
+  "firmware_root": "E:\\RoboMaster\\002\\integration\\infantry2.1\\infantry2.1",
+  "host_base_commit": "cc2c38a9429451c7fc224c3105412bbd77affe34",
+  "host_source_sha256": {
+    "tools/diagnose_coordinate_chain.py": "205c5fb4427f5f9ef768931eb20d0e30bb724c5031c97ef3f20b2c399760aed5",
+    "tools/coordinate_diagnostics/chassis.c": "877ab77ab7646a329fb11b14539c7a5d7d0ec60817939bf54294b7a18b968d51",
+    "tools/coordinate_diagnostics/emit.cpp": "a0f3e2e10bd4f7a3988cf7a704d64b602a6c6071b99284e81bed1e38b2814635",
+    "tools/coordinate_diagnostics/gimbal.c": "14b62a8f2a3182fc56cd5faf0bec8dc7a72d936b87be6a94ee63d4b88f2e576c",
+    "src/rm_serial_driver/include/rm_serial_driver/world_trajectory_contract.hpp": "59300a642f188c41672db91020314d5085d8fc481be57fbd588242a6e8c22db9",
+    "src/rm_serial_driver/include/rm_serial_driver/trajectory_packet.hpp": "aaf2748303d1d4d784fda785a6daa3988fce7b70896363ef8a196368913e7f3b",
+    "src/rm_serial_driver/include/rm_serial_driver/packet.hpp": "188ac90214ec0800aedd3394e1b943a86ec6a959fb4e03de4301e1bbd5caf27b",
+    "src/rm_serial_driver/include/rm_serial_driver/crc.hpp": "6753c0fa831d4c2f049a7ea84196425864399d058c71b5992d94e4aac929bd85",
+    "src/rm_serial_driver/src/crc.cpp": "5fcf054a699858723cddb9be3848e273378dff9ea69e3fabe7736fba0cde9a8c"
+  },
+  "firmware_commit": "44b6a73ca261177d81184919213490f02ff84651",
+  "cc": "gcc.exe (x86_64-win32-seh-rev0, Built by MinGW-Builds project) 13.2.0",
+  "cxx": "g++.exe (x86_64-win32-seh-rev0, Built by MinGW-Builds project) 13.2.0",
+  "firmware_sha256": {
+    "MDK-ARM/infantry.uvprojx": "3dc451da847f02496f3c60372dda69295adcfa3a30ea13977c9c79e4dae4cf99",
+    "application/IMU/gimbal/INS_task.c": "04aeb2d741a253e2ac20efcf0ca759e1e58f0d81c39c5d5af665964668fea02b",
+    "application/IMU/gimbal/INS_task.h": "3739c466b83c89ad11046100d89e5caa7b7add962ee710673600ab1d2030880a",
+    "application/autoaim/autoaim.c": "57320358bfb28a7c1d3e720d67cc8f33b3b9ae274fbf0b0f3c4c5c2408e1a748",
+    "application/autoaim/c_mode_mpc_config.h": "3a0b0245042723a506c28a0bb04739dcc9a86938949bb4b52e4849020924bb8c",
+    "application/autoaim/planned_trajectory.c": "80f533b47718d7708ce6a6f35c3105b998b608ac34ef8066d8a7d2bb25b41707",
+    "application/autoaim/reference.c": "9dcde5ffb2ee44873b1e452db244971cf1ea8651d138d3c6f9365e1a1dc242f7",
+    "application/autoaim/vision.c": "a6f774c346d34218a8ba768a68b9cb784234cfb0f160787285f9fbc89553c5fb",
+    "application/autoaim/vision_feedback.c": "34c6cfb47e03706dfb16aa362face5712eff4c96b1872a6e54ee0757080a73e1",
+    "application/chassis/supercap.c": "743493bf382a84313a59cbb317cbfae6d1294805e81c5e6b6ffc1deed9eb1d64",
+    "application/chassis/yaw_task.c": "d3d6429ed5bb0be2ef1553e8880e60dd3b5e7e7aa3a8879de3d972141b813a7a",
+    "application/communication/board_comm.h": "95ca1fa1c456a4b2b9ca7c05b559ab23c2b417f27635a39631d058bc41671c45",
+    "application/communication/can_tx.c": "ea4cb3352a4f85d615299a0048aab5633a9a2f95fa30a6d93585b26b731e1fa3",
+    "application/communication/chassis/CAN_receive.c": "578ca6b7ac34237d41d028af75cc00ba9c1888796c18f8416442ade8236ebc4d",
+    "application/communication/gimbal/senddata_task.c": "af10d026b5306fd950754cfa50268833c5e4e2f52b8e4104419718187a7ced44",
+    "application/communication/supercap_link.c": "5360c14ce39e6c4f5203ab12f009a8f3f421a1cbb06bc9099c3dc8921902257d",
+    "application/gimbal/DM4310.c": "87fef6967a6b4c40317f7c4d3644cf82d9118e180ab65dc26174fd8a231e08af",
+    "components/algorithm/AHRS_middleware.h": "7f0d295f3d06dec9319a54b2df648e708db3d208d47242e3c79e25f2909340c4",
+    "components/controller/chassis/pid.c": "b4809bf19ffacd1177081f6d2cf1a8066d261c28a25bce9eba5aacba91d480f6"
+  },
+  "host_checks_passed": true,
+  "cases": [
+    {
+      "name": "yaw_zero",
+      "raw_imu_yaw_rad": 0.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a6010100000000000200280000000000295c0f3e00000000000000000000000000000000fbb7",
+      "a6_yaw_rad": 0.0,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e0000000000000000006150",
+      "feedback_yaw_rad": 0.0,
+      "imu_ticks": 4096,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100000000052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.150000006,
+      "executed_pitch_reference_rad": -0.150000006,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -180.0
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -180.0
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "yaw_plus_one",
+      "raw_imu_yaw_rad": 1.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a601010000000000020028000000803f295c0f3e000000000000000000000000000000002d28",
+      "a6_yaw_rad": 1.0,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e006400000000000000be95",
+      "feedback_yaw_rad": 1.0,
+      "imu_ticks": 5399,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100e99f00052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.150000006,
+      "executed_pitch_reference_rad": -0.150000006,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": -57.2900009,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 65.44925710000004
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": -57.2900009,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 65.44925710000004
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "yaw_minus_one",
+      "raw_imu_yaw_rad": -1.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a60101000000000002002800000080bf295c0f3e000000000000000000000000000000008647",
+      "a6_yaw_rad": -1.0,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e009cff0000000000003c75",
+      "feedback_yaw_rad": -1.0,
+      "imu_ticks": 2792,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100166100052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.150000006,
+      "executed_pitch_reference_rad": -0.150000006,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": 57.2900009,
+          "current_deg": 122.695313,
+          "yaw_reference_deg_s": -286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -65.40531209999999
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": 57.2900009,
+          "current_deg": 122.695313,
+          "yaw_reference_deg_s": -286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -65.40531209999999
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": 122.695313,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": 122.695313,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "yaw_near_plus_pi",
+      "raw_imu_yaw_rad": 3.13000011,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a60101000000000002002800ec514840295c0f3e000000000000000000000000000000006069",
+      "a6_yaw_rad": 3.130000114440918,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e0039010000000000003f8e",
+      "feedback_yaw_rad": 3.13,
+      "imu_ticks": 8176,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100b9f300052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.150000006,
+      "executed_pitch_reference_rad": -0.150000006,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": -179.330002,
+          "current_deg": -0.703125,
+          "yaw_reference_deg_s": -286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -178.626877
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": -179.330002,
+          "current_deg": -0.703125,
+          "yaw_reference_deg_s": -286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -178.626877
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -0.703125,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -0.703125,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "yaw_near_minus_pi",
+      "raw_imu_yaw_rad": -3.13000011,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a60101000000000002002800ec5148c0295c0f3e00000000000000000000000000000000cb06",
+      "a6_yaw_rad": -3.130000114440918,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e00c7fe0000000000000c73",
+      "feedback_yaw_rad": -3.13,
+      "imu_ticks": 15,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100460d00052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.150000006,
+      "executed_pitch_reference_rad": -0.150000006,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": 179.330017,
+          "current_deg": 0.659179688,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 178.670837312
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": 179.330017,
+          "current_deg": 0.659179688,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 178.670837312
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": 0.659179688,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": 0.659179688,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "yaw_sign_isolated",
+      "raw_imu_yaw_rad": 1.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a60101000000000002002800000080bf295c0f3e000000000000000000000000000000008647",
+      "a6_yaw_rad": -1.0,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e006400000000000000be95",
+      "feedback_yaw_rad": 1.0,
+      "imu_ticks": 5399,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100166100052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.150000006,
+      "executed_pitch_reference_rad": -0.150000006,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": 57.2900009,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": -286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -179.9707411
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": 57.2900009,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": -286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -179.9707411
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -122.739258,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "pitch_logged_reachable",
+      "raw_imu_yaw_rad": 0.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a6010100000000000200280000000000d74d893e0000000000000000000000000000000068ca",
+      "a6_yaw_rad": 0.0,
+      "a6_pitch_rad": 0.2681719958782196,
+      "feedback_5a_hex": "5a0000000e0000000000000000006150",
+      "feedback_yaw_rad": 0.0,
+      "imu_ticks": 4096,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100000000052281",
+      "can_307_hex": "0000000000012281",
+      "mapped_pitch_rad": -0.278172016,
+      "executed_pitch_reference_rad": -0.278172016,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -180.0
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": -180.0
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -180.0,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "pitch_logged_unreachable",
+      "raw_imu_yaw_rad": 0.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.280000001,
+      "a6_hex": "a6010100000000000200280000000000d74d893e0000000000000000000000000000000068ca",
+      "a6_yaw_rad": 0.0,
+      "a6_pitch_rad": 0.2681719958782196,
+      "feedback_5a_hex": "5a0000000e0000000000000000006150",
+      "feedback_yaw_rad": 0.0,
+      "imu_ticks": 4096,
+      "parser_reason": 9,
+      "trajectory_executable": false
+    },
+    {
+      "name": "derivatives",
+      "raw_imu_yaw_rad": 0.300000012,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a601010000000000020028009a99993e8fc2753e0000a03fcdcc4c3e000000c09a9999bee5ff",
+      "a6_yaw_rad": 0.30000001192092896,
+      "a6_pitch_rad": 0.23999999463558197,
+      "feedback_5a_hex": "5a0000000e001e00000000000000143b",
+      "feedback_yaw_rad": 0.3,
+      "imu_ticks": 4487,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100f93b00052281",
+      "can_307_hex": "fb2207d000012281",
+      "mapped_pitch_rad": -0.25,
+      "executed_pitch_reference_rad": -0.250399411,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": -17.4013271,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 145.4160559
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": -17.3300076,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 145.48737540000002
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "derivative_limits",
+      "raw_imu_yaw_rad": 0.300000012,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a601010000000000020028009a99993e8fc2753e0000a0409a99193f0000a04100000041cc84",
+      "a6_yaw_rad": 0.30000001192092896,
+      "a6_pitch_rad": 0.23999999463558197,
+      "feedback_5a_hex": "5a0000000e001e00000000000000143b",
+      "feedback_yaw_rad": 0.3,
+      "imu_ticks": 4487,
+      "parser_reason": 1,
+      "trajectory_executable": true,
+      "can_305_hex": "0100f91000052281",
+      "can_307_hex": "ec78b1e000012281",
+      "mapped_pitch_rad": -0.25,
+      "executed_pitch_reference_rad": -0.251215994,
+      "can_observations": [
+        {
+          "order": "head_tail",
+          "valid": true,
+          "target_deg": -18.0470543,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 144.77032869999996
+        },
+        {
+          "order": "tail_head",
+          "valid": true,
+          "target_deg": -17.7599945,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 286.478912,
+          "stopped_output": 0.0,
+          "yaw_error_deg": 145.05738849999997
+        },
+        {
+          "order": "missing_tail",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        },
+        {
+          "order": "mismatched_sequence",
+          "valid": false,
+          "target_deg": 0.0,
+          "current_deg": -162.817383,
+          "yaw_reference_deg_s": 0.0,
+          "stopped_output": 0.0
+        }
+      ]
+    },
+    {
+      "name": "host_revocation",
+      "raw_imu_yaw_rad": 0.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a60001000000000002002800000000000000000000000000000000000000000000000000be03",
+      "a6_yaw_rad": 0.0,
+      "a6_pitch_rad": 0.0,
+      "feedback_5a_hex": "5a0000000e0000000000000000006150",
+      "feedback_yaw_rad": 0.0,
+      "imu_ticks": 4096,
+      "parser_reason": 2,
+      "trajectory_executable": false
+    },
+    {
+      "name": "bad_crc",
+      "raw_imu_yaw_rad": 0.0,
+      "imu_pitch_rad": 0.140000001,
+      "mechanical_pitch_rad": -0.150000006,
+      "a6_hex": "a6010100000000000200280000000000295c0f3e00000000000000000000000000000000fbb6",
+      "a6_yaw_rad": 0.0,
+      "a6_pitch_rad": 0.14000000059604645,
+      "feedback_5a_hex": "5a0000000e0000000000000000006150",
+      "feedback_yaw_rad": 0.0,
+      "imu_ticks": 4096,
+      "parser_reason": 0,
+      "trajectory_executable": false
+    }
+  ],
+  "firmware_unchanged": true,
+  "fixture_count": 12,
+  "can_scenario_count": 36,
+  "coordinate_acceptance": "BLOCKED_PENDING_MECHANICAL_YAW_FRAME_CONFIRMATION",
+  "known_zero_origin_error_deg": -180.0,
+  "hardware_verified": false,
+  "ros2_build_verified": false,
+  "limitations": [
+    "Sensor/RC/peer/time inputs are host fixtures.",
+    "INS encoder statements are extracted; AHRS acquisition is not simulated.",
+    "RC/0x300 health envelopes are fixtures; the real senddata_task scheduler is not run.",
+    "The full detector/TF/ballistic/MPC ROS node is not run.",
+    "Expected discrepancy checks do not certify correct motion."
+  ]
+}

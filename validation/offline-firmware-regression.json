@@ -1,0 +1,95 @@
+{
+  "firmware_commit": "44b6a73ca261177d81184919213490f02ff84651",
+  "compiler": "GCC 13.2.0 (MinGW-w64 UCRT x86_64)",
+  "suite_count": 17,
+  "passed": 17,
+  "suites": [
+    {
+      "suite": "vt13",
+      "passed": true,
+      "output": "VT13: split/merged/noise/CRC/range/CNS/H/freshness PASS\n"
+    },
+    {
+      "suite": "board_comm",
+      "passed": true,
+      "output": "Board link: bus isolation/S/RC loss/H/aim timeout/tick wrap PASS\n"
+    },
+    {
+      "suite": "pitch142",
+      "passed": true,
+      "output": "Pitch142: exact N/C gains+FF/integrated RC/limits/vision sign+slew/no manual C/target loss/S/offline PASS\n"
+    },
+    {
+      "suite": "pitch_trajectory",
+      "passed": true,
+      "output": "Pitch trajectory endpoints/limits/signs/unchanged gains/IMU/modes: 26 checks PASS\n"
+    },
+    {
+      "suite": "pitch_world",
+      "passed": true,
+      "output": "Production world Pitch conversion/revocation/diagnostics/limits/modes/wrap: 88 checks PASS\n"
+    },
+    {
+      "suite": "vision142",
+      "passed": true,
+      "output": "Vision142: 26B CRC/fragments/merge/noise/flags/fixed units/geometry/stale/model/tracking PASS\n"
+    },
+    {
+      "suite": "feedback142",
+      "passed": true,
+      "output": "Feedback142: known CRC vector/16B LE units/USB-not-ready/10ms/IMU validity/busy+reset flag PASS\n"
+    },
+    {
+      "suite": "autoaim142",
+      "passed": true,
+      "output": "Autoaim142: versioned CAN ABI/yaw frame+sign/slew/feedback loss/S/stale PASS\n"
+    },
+    {
+      "suite": "planned_trajectory",
+      "passed": true,
+      "output": "Planned trajectory fixed40/CRC/fragments/nonfinite/sequence/tick wrap: 115 checks PASS\n"
+    },
+    {
+      "suite": "trajectory_admission",
+      "passed": true,
+      "output": "Trajectory admission/expiry/cache/modes/IMU/fault recovery: 79 checks PASS\n"
+    },
+    {
+      "suite": "trajectory_can",
+      "passed": true,
+      "output": "Trajectory CAN pair/order/loss/source/epochs/snapshot/wrap: 48 checks PASS\n"
+    },
+    {
+      "suite": "sender_safety",
+      "passed": true,
+      "output": "Sender IMU freeze/queued-frame abort/failure latch/S recovery: 53 checks PASS\n"
+    },
+    {
+      "suite": "yaw_state",
+      "passed": true,
+      "output": "EXPECTED_UNRESOLVED_PI_OFFSET: raw yaw zero -> ticks4096, A6 target0 -> 180deg error\nYaw original PID/modes/pair hold/local bounded stop/fault guards: 241 checks PASS\n"
+    },
+    {
+      "suite": "yaw_coordinates",
+      "passed": true,
+      "output": "DIAGNOSTIC ONLY: existing pi-origin discrepancy is intentionally NOT repaired\nraw_IMU(rad) A6_command(rad) 5A_yaw(rad) ticks 305_target(deg) control_angle(deg)\n-3.141593 3.141593 -3.14 8191 -180.00 -0.044\n-1.000000 1.000000 -1.00 2792 -57.29 122.695\n0.000000 -0.000000 0.00 4096 0.00 -180.000\n1.000000 -1.000000 1.00 5399 57.29 -122.739\n3.141593 -3.141593 -3.14 8191 -180.00 -0.044\nYaw coordinate DIAGNOSTIC (offset preserved): 60 checks PASS\n"
+    },
+    {
+      "suite": "wire13",
+      "passed": true,
+      "output": "1.3 real sender -> real chassis receiver: units/keys/N/S/RC loss/no vision PASS\n"
+    },
+    {
+      "suite": "supercap21",
+      "passed": true,
+      "output": "Supercap21: actual CAN2 RX/step/command/CAN1 forward, key+H/S/RC loss/fault/rearm/mailbox/VOFA/scaling/CRC/replay PASS\n"
+    },
+    {
+      "suite": "supercap_gimbal",
+      "passed": true,
+      "output": "Supercap gimbal: production CAN1 receiver, bus/DLC/IDE/RTR filtering, duplicate/stale VOFA PASS\n"
+    }
+  ],
+  "hardware_verified": false,
+  "keil_rebuilt": false
+}

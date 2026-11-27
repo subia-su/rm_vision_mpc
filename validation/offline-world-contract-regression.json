@@ -1,0 +1,32 @@
+{
+  "upstream_commit": "35ca5d59cef9c6986cf994f0183be79b6c16b6e5",
+  "compiler": "g++.exe (x86_64-win32-seh-rev0, Built by MinGW-Builds project) 13.2.0",
+  "suites": [
+    {
+      "suite": "serial_packet_stream",
+      "compile_exit": 0,
+      "passed": true,
+      "run_exit": 0,
+      "output": "PASS serial: split reads, CRC recovery, bursts, short writes, golden wire frames, flags, numeric guards\n"
+    },
+    {
+      "suite": "world_trajectory_contract",
+      "compile_exit": 0,
+      "passed": true,
+      "run_exit": 0,
+      "ctest_mode_exit": 0,
+      "output": "World contract: 76 checks PASS; 15 real A6 vectors emitted when requested\nWorld contract: 75 checks PASS; 15 real A6 vectors emitted when requested\n"
+    },
+    {
+      "suite": "actual_mcu_interop",
+      "compile_exit": 0,
+      "passed": true,
+      "firmware_root": "E:\\RoboMaster\\002\\integration\\infantry2.1\\infantry2.1",
+      "vector_bytes": 570,
+      "run_exit": 0,
+      "output": "Actual C++ A6 -> actual MCU USB/world-Pitch parser: 68 checks PASS\n"
+    }
+  ],
+  "hardware_verified": false,
+  "ros2_build_verified": false
+}

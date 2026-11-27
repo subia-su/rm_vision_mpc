@@ -10,7 +10,7 @@
 - 新 `world_trajectory_contract.hpp` 检查坐标域、有限值、原速度/加速度上限及固定40ms时效。世界Pitch数学域是±π/2；这没有放宽DM机械限位。
 - 规划异常、目标超时/丢失及契约不满足时发送更新序号的valid=0，清除无用浮点值；保留序号、host_ms、TTL和原38字节A6格式/CRC。不再只等下位机旧轨迹自然到期。
 - A6年龄包含本次规划到发送前的steady-clock耗时（向上取整）和配置传输预算；它不重复加目标年龄。目标年龄已经用于预测，并另外受50ms数据源超时约束。host_ms仍不被当作MCU本地时钟。
-- 单帧总年龄还预留MCU3ms CAN预算。它是接口预算，不代表已测得真实总线/USB延迟上界；实际延迟超过预算时会由MCU继续拒绝。
+- 单帧总年龄还预留MCU3ms CAN预算。它是接口预算，不代表已测得真实总线/USB延迟上界。MCU能识别其本地计时范围内的过期，但不能仅凭当前字段识别未计入的USB排队/运输延迟；该预算仍需实测验收。
 - 新 `/serial_driver/planner_status`（std_msgs/String）报告最近发送帧的规划结果；`/serial_driver/trajectory`原11列不变。只读link_monitor追加最近序号、A6年龄、原因和原因接收年龄。原因与数组是两个ROS话题，不构成同步ACK；也不代表MCU已接纳。
 - 优化器权重、弹道重力/弹速配置、符号、Yaw映射、USB/CAN布局、下位机PID与发射逻辑均未修改。本仓库实际调用自带MpcPlanner（投影梯度实现），本轮没有换用TinyMPC库；后续更换求解器仍可复用PlannedState和本契约。
 
