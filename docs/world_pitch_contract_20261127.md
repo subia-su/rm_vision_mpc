@@ -1,6 +1,8 @@
 # 世界Pitch对接与迁移（2026-11-27）
 
-本地完整源码位于Windows `E:\RoboMaster\rm_vision_mpc`，来自GitHub `subia-su/rm_vision_mpc` 提交 `35ca5d59cef9c6986cf994f0183be79b6c16b6e5` 的完整归档。286个源文件已逐个验证Git blob SHA；本地Git导入基线为5eab0ce，并非重新构造的上游提交历史。交接使用补丁，不推送这个导入历史。
+本地完整源码位于Windows `E:\RoboMaster\rm_vision_mpc`。此前从GitHub `subia-su/rm_vision_mpc` 提交 `35ca5d59cef9c6986cf994f0183be79b6c16b6e5` 下载完整归档，286个源文件逐个验证Git blob SHA；本地导入基线5eab0ce只用于最初的补丁审计。
+
+现已将修复迁移到真实上游35ca5d5历史，并发布到本队主仓库 [xkddyl/rm_vision_mpc](https://github.com/xkddyl/rm_vision_mpc)。`origin`指向本队仓库，后续优先通过GitHub分支/提交链接协作；旧的本地导入历史没有推送。本文后面的补丁流程只用于核对现场旧版本，不替代当前GitHub主仓库。
 
 ## 改动
 

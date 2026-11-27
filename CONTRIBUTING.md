@@ -15,7 +15,7 @@ git switch -c fix/你的任务名
 ```bash
 git add 你修改的文件
 git commit -m "说明改动的具体行为"
-git push -u origin 当前分支
+git push -u origin HEAD
 ```
 
 有本仓库写权限的队员推送自己的分支，再用Pull Request汇总；没有写权限的队员可从本仓库fork后提交PR。发给队友时优先发送本仓库的分支或提交链接，便于确认版本。
