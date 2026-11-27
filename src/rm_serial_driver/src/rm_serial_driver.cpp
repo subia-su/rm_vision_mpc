@@ -12,6 +12,7 @@
 // C++ system
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -41,10 +42,17 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
   bullet_speed_ = declare_parameter("aim.bullet_speed", 25.0);
   system_delay_ = declare_parameter("aim.system_delay", 0.03);
   gravity_ = declare_parameter("aim.gravity", 9.80665);
-  trajectory_ttl_ms_ = static_cast<uint16_t>(declare_parameter<int>("trajectory.ttl_ms", 40));
-  transport_age_ms_ = static_cast<uint16_t>(declare_parameter<int>("trajectory.transport_age_ms", 2));
-  pitch_min_ = declare_parameter("mpc.pitch_min", -0.39);
-  pitch_max_ = declare_parameter("mpc.pitch_max", 0.07);
+  const auto & overrides = get_node_parameters_interface()->get_parameter_overrides();
+  if (overrides.count("mpc.pitch_min") || overrides.count("mpc.pitch_max")) {
+    throw std::invalid_argument(
+      "Remove legacy mechanical mpc.pitch_min/max; use trajectory.world_pitch_min/max in world radians");
+  }
+  const auto pitch_frame = declare_parameter<std::string>("trajectory.pitch_frame", "world");
+  trajectory_policy_.ttl_ms = declare_parameter<int>("trajectory.ttl_ms", 40);
+  trajectory_policy_.transport_age_ms = declare_parameter<int>("trajectory.transport_age_ms", 2);
+  trajectory_policy_.pitch_min = declare_parameter("trajectory.world_pitch_min", -std::acos(-1.0) / 2.0);
+  trajectory_policy_.pitch_max = declare_parameter("trajectory.world_pitch_max", std::acos(-1.0) / 2.0);
+  trajectory_policy_.target_timeout_ms = declare_parameter("aim.target_timeout_ms", 50.0);
   MpcLimits limits;
   limits.yaw_speed = declare_parameter("mpc.yaw_speed_limit", 5.0);
   limits.pitch_speed = declare_parameter("mpc.pitch_speed_limit", 0.6);
@@ -55,8 +63,11 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
   weights.speed = declare_parameter("mpc.speed_weight", 0.8);
   weights.acceleration = declare_parameter("mpc.acceleration_weight", 0.04);
   weights.acceleration_delta = declare_parameter("mpc.jerk_weight", 0.2);
-  if (bullet_speed_ <= 1.0 || trajectory_ttl_ms_ == 0 || trajectory_ttl_ms_ > 50 ||
-    transport_age_ms_ > 50 || pitch_min_ >= pitch_max_)
+  trajectory_policy_.limits = limits;
+  validate_world_policy(trajectory_policy_, pitch_frame);
+  if (!std::isfinite(bullet_speed_) || bullet_speed_ <= 1.0 ||
+    !std::isfinite(system_delay_) || system_delay_ < 0.0 ||
+    !std::isfinite(gravity_) || gravity_ <= 0.0)
   {
     throw std::invalid_argument("invalid ballistic or A6 freshness parameters");
   }
@@ -70,6 +81,7 @@ RMSerialDriver::RMSerialDriver(const rclcpp::NodeOptions & options)
   latency_pub_ = this->create_publisher<std_msgs::msg::Float64>("/latency", 10);
   trajectory_pub_ =
     this->create_publisher<std_msgs::msg::Float64MultiArray>("/serial_driver/trajectory", 10);
+  planner_status_pub_ = this->create_publisher<std_msgs::msg::String>("/serial_driver/planner_status", 10);
   marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/aiming_point", 10);
 
   // Detect parameter client
@@ -185,72 +197,82 @@ void RMSerialDriver::sendData(const auto_aim_interfaces::msg::Target::SharedPtr 
 {
   const auto observed_revision = port_revision_.load(std::memory_order_acquire);
   try {
+    const auto reference_origin = std::chrono::steady_clock::now();
     TrajectoryCommand command;
+    std::string planner_status = "no_tracking_target";
     command.sequence = ++trajectory_sequence_;
     command.host_ms = static_cast<uint32_t>(this->now().nanoseconds() / 1000000LL);
-    command.ttl_ms = trajectory_ttl_ms_;
-    const double message_age = std::max(0.0, (this->now() - msg->header.stamp).seconds());
-    command.age_ms = transport_age_ms_;
-    if (msg->tracking &&
-      (msg->armors_num == 2 || msg->armors_num == 3 || msg->armors_num == 4))
-    {
-      std::vector<AimReference> reference;
-      reference.reserve(mpc_horizon_);
-      for (std::size_t k = 0; k < mpc_horizon_; ++k) {
-        double flight = 0.0, x = 0.0, y = 0.0, z = 0.0;
-        for (unsigned iteration = 0; iteration < 3; ++iteration) {
-          const double t = message_age + system_delay_ +
-            (static_cast<double>(k) - static_cast<double>(mpc_horizon_ / 2)) * mpc_dt_ + flight;
-          const double center_x = msg->position.x + msg->velocity.x * t;
-          const double center_y = msg->position.y + msg->velocity.y * t;
-          const double center_z = msg->position.z + msg->velocity.z * t;
-          double best_distance = std::numeric_limits<double>::infinity();
-          for (int armor = 0; armor < msg->armors_num; ++armor) {
-            const double armor_yaw = msg->yaw + msg->v_yaw * t +
-              armor * 2.0 * std::acos(-1.0) / msg->armors_num;
-            const bool alternate = msg->armors_num == 4 && (armor & 1);
-            const double radius = alternate ? msg->radius_2 : msg->radius_1;
-            const double candidate_x = center_x - radius * std::cos(armor_yaw);
-            const double candidate_y = center_y - radius * std::sin(armor_yaw);
-            const double candidate_z = center_z + (alternate ? msg->dz : 0.0);
-            const double distance = candidate_x * candidate_x + candidate_y * candidate_y +
-              candidate_z * candidate_z;
-            if (distance < best_distance) {
-              best_distance = distance;
-              x = candidate_x; y = candidate_y; z = candidate_z;
+    command.ttl_ms = static_cast<uint16_t>(trajectory_policy_.ttl_ms);
+    const double message_age = (this->now() - msg->header.stamp).seconds();
+    try {
+      if (msg->tracking &&
+        (msg->armors_num == 2 || msg->armors_num == 3 || msg->armors_num == 4))
+      {
+        const auto age_error = target_age_error(message_age, trajectory_policy_);
+        if (!age_error.empty()) {throw std::domain_error(age_error);}
+        std::vector<AimReference> reference;
+        reference.reserve(mpc_horizon_);
+        for (std::size_t k = 0; k < mpc_horizon_; ++k) {
+          double flight = 0.0, x = 0.0, y = 0.0, z = 0.0;
+          for (unsigned iteration = 0; iteration < 3; ++iteration) {
+            const double t = message_age + system_delay_ +
+              (static_cast<double>(k) - static_cast<double>(mpc_horizon_ / 2)) * mpc_dt_ + flight;
+            const double center_x = msg->position.x + msg->velocity.x * t;
+            const double center_y = msg->position.y + msg->velocity.y * t;
+            const double center_z = msg->position.z + msg->velocity.z * t;
+            double best_distance = std::numeric_limits<double>::infinity();
+            for (int armor = 0; armor < msg->armors_num; ++armor) {
+              const double armor_yaw = msg->yaw + msg->v_yaw * t +
+                armor * 2.0 * std::acos(-1.0) / msg->armors_num;
+              const bool alternate = msg->armors_num == 4 && (armor & 1);
+              const double radius = alternate ? msg->radius_2 : msg->radius_1;
+              const double candidate_x = center_x - radius * std::cos(armor_yaw);
+              const double candidate_y = center_y - radius * std::sin(armor_yaw);
+              const double candidate_z = center_z + (alternate ? msg->dz : 0.0);
+              const double distance = candidate_x * candidate_x + candidate_y * candidate_y +
+                candidate_z * candidate_z;
+              if (distance < best_distance) {
+                best_distance = distance;
+                x = candidate_x; y = candidate_y; z = candidate_z;
+              }
             }
+            flight = std::hypot(std::hypot(x, y), z) / bullet_speed_;
           }
-          flight = std::hypot(std::hypot(x, y), z) / bullet_speed_;
+          const double horizontal = std::hypot(x, y);
+          if (horizontal < 0.05) throw std::domain_error("target is too close");
+          const double v2 = bullet_speed_ * bullet_speed_;
+          const double discriminant = v2 * v2 - gravity_ *
+            (gravity_ * horizontal * horizontal + 2.0 * z * v2);
+          if (!std::isfinite(discriminant) || discriminant <= 0.0) {
+            throw std::domain_error("target has no ballistic solution");
+          }
+          const double elevation =
+            std::atan((v2 - std::sqrt(discriminant)) / (gravity_ * horizontal));
+          reference.push_back({std::atan2(y, x), -elevation});
         }
-        const double horizontal = std::hypot(x, y);
-        if (horizontal < 0.05) throw std::domain_error("target is too close");
-        const double v2 = bullet_speed_ * bullet_speed_;
-        const double discriminant = v2 * v2 - gravity_ *
-          (gravity_ * horizontal * horizontal + 2.0 * z * v2);
-        if (!std::isfinite(discriminant) || discriminant <= 0.0) {
-          throw std::domain_error("target has no ballistic solution");
-        }
-        const double elevation =
-          std::atan((v2 - std::sqrt(discriminant)) / (gravity_ * horizontal));
-        reference.push_back({std::atan2(y, x), -elevation});
+        const PlannedState plan = mpc_->solve(reference);
+        command.valid = true;
+        command.yaw = static_cast<float>(plan.yaw);
+        command.pitch = static_cast<float>(plan.pitch);
+        command.yaw_speed = static_cast<float>(plan.yaw_speed);
+        command.pitch_speed = static_cast<float>(plan.pitch_speed);
+        command.yaw_acc = static_cast<float>(plan.yaw_acc);
+        command.pitch_acc = static_cast<float>(plan.pitch_acc);
+        planner_status = "ok_world_pitch";
+      } else {
+        mpc_->reset();
+        if (msg->tracking) {planner_status = "invalid_armor_count";}
       }
-      const PlannedState plan = mpc_->solve(reference);
-      command.valid = true;
-      command.yaw = static_cast<float>(plan.yaw);
-      command.pitch = static_cast<float>(plan.pitch);
-      command.yaw_speed = static_cast<float>(plan.yaw_speed);
-      command.pitch_speed = static_cast<float>(plan.pitch_speed);
-      command.yaw_acc = static_cast<float>(plan.yaw_acc);
-      command.pitch_acc = static_cast<float>(plan.pitch_acc);
-      if (command.pitch < pitch_min_ || command.pitch > pitch_max_) {
-        command.pitch = static_cast<float>(std::max(pitch_min_, std::min(pitch_max_,
-          static_cast<double>(command.pitch))));
-        command.pitch_speed = 0.0F;
-        command.pitch_acc = 0.0F;
-      }
-    } else {
+    } catch (const std::logic_error & ex) {
+      // Always send a newer valid=0 to revoke the MCU's previous reference.
+      revoke_trajectory(command);
       mpc_->reset();
+      planner_status = ex.what();
     }
+    const double elapsed_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - reference_origin).count();
+    const auto contract_error = finalize_world_trajectory(command, trajectory_policy_, elapsed_ms);
+    if (!contract_error.empty()) {planner_status = contract_error; mpc_->reset();}
     const auto packed = pack_trajectory(command);
     const std::vector<uint8_t> data(packed.begin(), packed.end());
 
@@ -273,13 +295,16 @@ void RMSerialDriver::sendData(const auto_aim_interfaces::msg::Target::SharedPtr 
       static_cast<double>(command.pitch_acc),
     };
     trajectory_pub_->publish(trajectory_debug);
+    std_msgs::msg::String status_message;
+    status_message.data = planner_status;
+    planner_status_pub_->publish(status_message);
 
     std_msgs::msg::Float64 latency;
     latency.data = (this->now() - msg->header.stamp).seconds() * 1000.0;
     RCLCPP_DEBUG_STREAM(get_logger(), "Total latency: " + std::to_string(latency.data) + "ms");
     latency_pub_->publish(latency);
   } catch (const std::logic_error & ex) {
-    // Invalid target data is not a USB failure. Let the MCU freshness gate expire.
+    // Errors outside planning/contract validation still leave MCU expiry active.
     RCLCPP_ERROR_THROTTLE(
       get_logger(), *get_clock(), 1000, "Rejected target packet: %s", ex.what());
   } catch (const std::exception & ex) {

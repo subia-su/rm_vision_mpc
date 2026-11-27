@@ -16,7 +16,7 @@ from rclpy.time import Time
 import tf2_ros
 
 from auto_aim_interfaces.msg import Target, YoloBoxes
-from std_msgs.msg import Float64, Float64MultiArray
+from std_msgs.msg import Float64, Float64MultiArray, String
 
 
 QOS = QoSProfile(
@@ -76,6 +76,10 @@ class LinkMonitor(Node):
     self.tf_gaps = []
     self.trajectory_receipts = []
     self.commands = []
+    self.planner_status = "not_received"
+    self.planner_status_time = None
+    self.last_sequence = -1
+    self.last_command_age_ms = float("nan")
     self.serial_pid, self.serial_read, self.serial_write = serial_io()
     self.last_tf_time = None
     self.last_tf_stamp = None
@@ -84,6 +88,11 @@ class LinkMonitor(Node):
     self.create_subscription(Float64, "/latency", self.on_latency, 10)
     self.create_subscription(
       Float64MultiArray, "/serial_driver/trajectory", self.on_trajectory, 10)
+    self.create_subscription(String, "/serial_driver/planner_status", self.on_planner_status, 10)
+
+  def on_planner_status(self, msg):
+    self.planner_status = msg.data
+    self.planner_status_time = time.monotonic()
 
   def on_target(self, msg):
     now = time.monotonic()
@@ -104,6 +113,8 @@ class LinkMonitor(Node):
       return
     self.trajectory_receipts.append(time.monotonic())
     self.commands.append((msg.data[0] > 0.5, msg.data[5], msg.data[6]))
+    self.last_sequence = int(msg.data[1])
+    self.last_command_age_ms = msg.data[3]
 
   def sample_tf(self):
     now = time.monotonic()
@@ -214,6 +225,11 @@ class LinkMonitor(Node):
       "a6_msgs": len(self.trajectory_receipts),
       "a6_valid": command_valid,
       "a6_valid_changes": command_valid_changes,
+      "a6_last_sequence": self.last_sequence,
+      "a6_last_age_ms": self.last_command_age_ms,
+      "planner_status": self.planner_status,
+      "planner_status_age_ms": round((time.monotonic() - self.planner_status_time) * 1000.0, 2)
+        if self.planner_status_time is not None else float("nan"),
       "a6_gap_p95_ms": round(percentile(trajectory_intervals, 0.95), 2),
       "a6_gap_max_ms": round(max(trajectory_intervals, default=float("nan")), 2),
       "cmd_yaw_step_p95_deg": round(percentile(command_yaw_steps, 0.95), 3),
@@ -241,7 +257,8 @@ class LinkMonitor(Node):
       f"tracking_error={row['cmd_feedback_yaw_error_deg']:6.3f}/"
       f"{row['cmd_feedback_pitch_error_deg']:6.3f}deg "
       f"latency={row['latency_p50_ms']:5.2f}/{row['latency_p95_ms']:5.2f}ms "
-      f"serial={row['serial_read_Bps']}/{row['serial_write_Bps']}B/s",
+      f"serial={row['serial_read_Bps']}/{row['serial_write_Bps']}B/s "
+      f"planner={row['planner_status']} age={row['a6_last_age_ms']}ms",
       flush=True,
     )
     self.reset_window()
@@ -268,6 +285,7 @@ def main():
       "target_gap_p95_ms", "target_gap_max_ms", "target_tracking",
       "tracking_changes", "boxes", "target_aim_yaw_deg", "a6_msgs", "a6_valid",
       "a6_valid_changes", "a6_gap_p95_ms", "a6_gap_max_ms", "cmd_yaw_step_p95_deg",
+      "a6_last_sequence", "a6_last_age_ms", "planner_status", "planner_status_age_ms",
       "cmd_yaw_step_max_deg", "cmd_pitch_step_p95_deg", "cmd_pitch_step_max_deg",
       "cmd_feedback_yaw_error_deg", "cmd_feedback_pitch_error_deg",
       "latency_p50_ms", "latency_p95_ms", "latency_max_ms",

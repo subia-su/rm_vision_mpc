@@ -1,0 +1,27 @@
+[
+  {
+    "case": "dry_run_preserves_files",
+    "passed": true,
+    "output": "Baseline hashes and git apply --check PASS.\nCHECK ONLY. Add --apply to edit source. No build, ROS launch or serial connection is performed.\n"
+  },
+  {
+    "case": "apply_matches_all_output_hashes",
+    "passed": true,
+    "output": "Baseline hashes and git apply --check PASS.\nApplied and verified. Review git diff and build on Ubuntu; nothing was started or flashed.\n"
+  },
+  {
+    "case": "idempotent_already_applied",
+    "passed": true,
+    "output": "Already applied; source hashes match. No files changed.\n"
+  },
+  {
+    "case": "rejects_divergent_source_without_writes",
+    "passed": true,
+    "output": "Target differs from the reviewed baseline; no files changed:\n.gitignore\n"
+  },
+  {
+    "case": "rejects_corrupt_patch_without_writes",
+    "passed": true,
+    "output": "Patch checksum mismatch; no files changed.\n"
+  }
+]

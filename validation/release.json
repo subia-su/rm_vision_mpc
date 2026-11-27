@@ -1,0 +1,14 @@
+{
+  "source_commit": "324f2ddcbed0e51ee387ef03d1c67ce2f9961809",
+  "zip": "E:\\RoboMaster\\rm_vision_mpc\\dist\\world-pitch-20261127.zip",
+  "zip_bytes": 25366,
+  "zip_sha256": "d8d92bc3657ea2c3ca7406c1a750055ac0819f1d19f30639ded14761258e8881",
+  "patch_sha256": "b9b2d3ba23516d3e695cd4e8a9049e7bb60242f361cbe8939d50b49723a3c74c",
+  "changed_source_files": 16,
+  "installer_tests_passed": 5,
+  "installer_tests_total": 5,
+  "ros2_build_verified": false,
+  "hardware_verified": false,
+  "deployed": false,
+  "pushed": false
+}

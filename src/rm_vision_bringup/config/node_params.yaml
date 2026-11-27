@@ -27,8 +27,11 @@
     mpc.pitch_speed_limit: 0.6
     mpc.yaw_acc_limit: 20.0
     mpc.pitch_acc_limit: 8.0
-    mpc.pitch_min: -0.39
-    mpc.pitch_max: 0.07
+    # World/horizontal Pitch; physical DM limits remain on the MCU.
+    trajectory.pitch_frame: world
+    trajectory.world_pitch_min: -1.5707963267948966
+    trajectory.world_pitch_max: 1.5707963267948966
+    aim.target_timeout_ms: 50.0
     mpc.angle_weight: 30.0
     mpc.speed_weight: 0.8
     mpc.acceleration_weight: 0.04

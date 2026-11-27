@@ -1,0 +1,22 @@
+{
+  "unchanged_optimizer_packet_crc": {
+    "src/rm_serial_driver/src/mpc_planner.cpp": true,
+    "src/rm_serial_driver/include/rm_serial_driver/mpc_planner.hpp": true,
+    "src/rm_serial_driver/include/rm_serial_driver/trajectory_packet.hpp": true,
+    "src/rm_serial_driver/src/crc.cpp": true,
+    "src/rm_serial_driver/include/rm_serial_driver/crc.hpp": true,
+    "src/rm_serial_driver/include/rm_serial_driver/packet.hpp": true,
+    "src/rm_serial_driver/include/rm_serial_driver/packet_stream.hpp": true
+  },
+  "monitor_csv_fields_match": true,
+  "monitor_csv_columns": 36,
+  "configs": {
+    "src/rm_serial_driver/config/serial_driver.yaml": true,
+    "src/rm_vision_bringup/config/node_params.yaml": true
+  },
+  "std_msgs_dependency_declared": true,
+  "firmware_commit": "8103c81b118277401659eccc07ba10135ef04f4f",
+  "firmware_changed_this_step": false,
+  "ros2_build_verified": false,
+  "hardware_verified": false
+}

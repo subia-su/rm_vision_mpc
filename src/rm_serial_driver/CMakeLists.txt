@@ -51,6 +51,12 @@ if(BUILD_TESTING)
   # The standalone regression uses assert, including in Release builds.
   target_compile_options(serial_packet_stream_test PRIVATE -UNDEBUG)
   add_test(NAME serial_packet_stream_test COMMAND serial_packet_stream_test)
+  add_executable(world_trajectory_contract_test
+    test/test_world_trajectory_contract.cpp src/crc.cpp)
+  target_include_directories(world_trajectory_contract_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_options(world_trajectory_contract_test PRIVATE -UNDEBUG)
+  add_test(NAME world_trajectory_contract_test COMMAND world_trajectory_contract_test)
 
   find_package(ament_lint_auto REQUIRED)
   list(APPEND AMENT_LINT_AUTO_EXCLUDE

@@ -5,4 +5,10 @@
     flow_control: none
     parity: none
     stop_bits: "1"
+    trajectory.pitch_frame: world
+    trajectory.world_pitch_min: -1.5707963267948966
+    trajectory.world_pitch_max: 1.5707963267948966
+    trajectory.ttl_ms: 40
+    trajectory.transport_age_ms: 2
+    aim.target_timeout_ms: 50.0
 

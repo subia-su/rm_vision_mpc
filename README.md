@@ -1,5 +1,13 @@
 # rm_vision
 
+**本队主仓库：[xkddyl/rm_vision_mpc](https://github.com/xkddyl/rm_vision_mpc)。以后源码改动与版本交接以这里为准。** 队员可直接Clone或使用Code → Download ZIP获取完整上位机源码；分支协作见 [CONTRIBUTING](CONTRIBUTING.md)。
+
+**队员编译固定交付版本：** [完整源码ZIP发布页](https://github.com/xkddyl/rm_vision_mpc/releases/tag/v2026.11.27-source.1) · [从下载到编译的说明](TEAM_BUILD.md)。请按发布标签取得配套源码，避免使用不同分支拼接文件。
+
+2026-11-27本地接口修复：世界Pitch不再截到DM机械区间；A6采用固定40ms契约，失效目标主动撤销旧轨迹。与infantry2.1世界角云台固件配套，尚未部署到Ubuntu/实车；见 [世界Pitch对接与迁移](docs/world_pitch_contract_20261127.md)。
+
+离线坐标诊断已接入真实C++打包器与双板C代码，包含CAN乱序/缺帧检查。目前Yaw零点与符号关系尚未完成机械验收；主机测试通过不代表坐标已正确。运行方法和静态验收表见 [坐标链路诊断](docs/offline_coordinate_diagnostics.md)。
+
 RoboMaster 装甲板视觉系统，运行于 Ubuntu 22.04 + ROS 2 Humble。
 当前版本同时保留传统 CV、TensorRT 和 OpenVINO CPU 三条检测路径。
 本机实时路径为：
@@ -938,7 +946,7 @@ ros2 param get /serial_driver trajectory.ttl_ms
 
 - 固件已实现 38 字节 `0xA6` 解析
 - `sequence`、`valid`、`ttl_ms` 和 CRC 校验通过
-- 联调模式允许自动执行，而不是仅处于 `C_MANUAL_TEST=1u`
+- 联调模式允许自动执行，而不是仅处于 `C_MPC_EXECUTE_ENABLE=0u`
 - 电机已使能，A6 执行分支没有被安全条件屏蔽
 
 如果视觉端 A6 `valid=1` 且 yaw 指令变化，但云台不动作，应优先排查下位机
