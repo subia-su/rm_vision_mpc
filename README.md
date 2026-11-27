@@ -2,6 +2,8 @@
 
 **本队主仓库：[xkddyl/rm_vision_mpc](https://github.com/xkddyl/rm_vision_mpc)。以后源码改动与版本交接以这里为准。** 队员可直接Clone或使用Code → Download ZIP获取完整上位机源码；分支协作见 [CONTRIBUTING](CONTRIBUTING.md)。
 
+**队员编译固定交付版本：** [完整源码ZIP发布页](https://github.com/xkddyl/rm_vision_mpc/releases/tag/v2026.11.27-source.1) · [从下载到编译的说明](TEAM_BUILD.md)。请按发布标签取得配套源码，避免使用不同分支拼接文件。
+
 2026-11-27本地接口修复：世界Pitch不再截到DM机械区间；A6采用固定40ms契约，失效目标主动撤销旧轨迹。与infantry2.1世界角云台固件配套，尚未部署到Ubuntu/实车；见 [世界Pitch对接与迁移](docs/world_pitch_contract_20261127.md)。
 
 离线坐标诊断已接入真实C++打包器与双板C代码，包含CAN乱序/缺帧检查。目前Yaw零点与符号关系尚未完成机械验收；主机测试通过不代表坐标已正确。运行方法和静态验收表见 [坐标链路诊断](docs/offline_coordinate_diagnostics.md)。
